@@ -1,0 +1,107 @@
+title: "human36m_vol_softmax_single"
+kind: "human36m"
+azureroot: ""
+batch_output: false
+vis_freq: 1000
+vis_n_elements: 10
+
+model:
+  name: "vol"
+  kind: "mpii"
+  
+  image_shape: [384, 384]
+  heatmap_shape: [96, 96]
+  heatmap_softmax: true
+  heatmap_multiplier: 100.0
+
+  init_weights: true
+  checkpoint: "./logs/eval_human36m_vol_softmax_single.pth"
+
+  backbone:
+    name: "resnet152"
+    style: "simple"
+
+    num_final_layer_channel: 17
+    num_joints: 17
+    num_layers: 152
+    
+    init_weights: true
+    fix_weights: false
+    checkpoint: "data/pretrained/human36m/backbone_weights.pth"
+    
+  volume_net:
+    volume_aggregation_method: "softmax"
+    use_gt_pelvis: false
+
+    cuboid_size: 2500.0
+    volume_size: 64
+    volume_multiplier: 1.0
+    volume_softmax: true
+
+    use_feature_v2v: true
+
+    temperature: 1500
+
+loss:
+  criterion: "MAE"
+  scale_keypoints_3d: 0.1
+
+  use_volumetric_ce_loss: true
+  volumetric_ce_loss_weight: 0.01
+
+  use_global_attention_loss: True
+  global_attention_loss_weight: 1000000
+
+dataset:
+  kind: "human36m"
+  data_format: ""
+  root: "data/human36m/processed"
+  extra_root: "data/human36m/extra"
+  val_labels_path: "data/human36m/extra/human36m-multiview-labels-GTbboxes.npy"
+  
+train:
+  n_objects_per_epoch: 15000
+  n_epochs: 9999
+
+  batch_size: 4
+
+  optimizer: 'Adam'
+  backbone_lr: 0.0001
+  backbone_lr_step: [1000]
+  backbone_lr_factor: 0.1
+  process_features_lr: 0.001
+  volume_net_lr: 0.001
+  volume_net_lr_step: [1000]
+  volume_net_lr_factor: 0.5
+
+  with_damaged_actions: true
+  undistort_images: true
+
+  scale_bbox: 1.0
+
+  shuffle: true
+  randomize_n_views: true
+  min_n_views: 1
+  max_n_views: 1
+  num_workers: 8
+
+  limb_length_path: "data/human36m/extra/mean_and_std_limb_length.h5"
+  pred_results_path: "data/pretrained/human36m/human36m_alg_10-04-2019/checkpoints/0060/results/train.pkl"
+
+val:
+  batch_size: 8
+
+  with_damaged_actions: true
+  undistort_images: true
+
+  scale_bbox: 1.0
+
+  shuffle: false
+  randomize_n_views: true
+  min_n_views: 1
+  max_n_views: 1
+  num_workers: 10
+  retain_every_n_frames_in_test: 1
+
+  limb_length_path: "data/human36m/extra/mean_and_std_limb_length.h5"
+  pred_results_path: "data/pretrained/human36m/human36m_alg_10-04-2019/checkpoints/0060/results/val.pkl"
