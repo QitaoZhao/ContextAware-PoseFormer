@@ -197,19 +197,8 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 	# used to turn on/off gradients
 	grad_context = torch.autograd.enable_grad if is_train else torch.no_grad
 	with grad_context():
-		# if master:
-		#     if is_train and config.train.n_iters_per_epoch is not None:
-		#         pbar = tqdm(total=min(config.train.n_iters_per_epoch, len(dataloader)))
-		#     else:
-		#         pbar = tqdm(total=len(dataloader))
-
-		# iterator = enumerate(dataloader)
-		# if is_train and config.train.n_iters_per_epoch is not None:
-		#     iterator = islice(iterator, config.train.n_iters_per_epoch)
-
 		prefetcher = dataset_utils.data_prefetcher(dataloader, device, is_train, config.val.flip_test)
 
-		index = 0
 		# for iter_i, batch in iterator:
 		batch = prefetcher.next()
 		while batch is not None:
@@ -217,22 +206,11 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 			end = time.time()
 			data_time = time.time() - end
 
-			print(torch.cuda.max_memory_allocated())
-
-			# keypoints_3d_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop = batch
 			images_batch, keypoints_3d_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop = batch
-			# images_batch_copy, images_batch, keypoints_3d_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop, keypoints_2d_batch_gt_crop = batch
-
-			# images_batch, keypoints_3d_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop = [subatch.float().to(device) for subatch in batch]
 
 			if model_type == "vol":
 				if (not is_train) and config.val.flip_test:
-					# keypoints_3d_pred = model(images_batch, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop)
-					# keypoints_3d_pred, keypoints_3d_pred_flip = keypoints_3d_pred[:config.val.batch_size], keypoints_3d_pred[config.val.batch_size:]
 					keypoints_3d_pred = model(images_batch[:, 0], keypoints_2d_batch_cpn[:, 0], keypoints_2d_batch_cpn_crop[:, 0].clone())
-					# keypoints_3d_pred = model(None, keypoints_2d_batch_cpn[:, 0], keypoints_2d_batch_cpn_crop[:, 0].clone())
-					# break
-					# keypoints_3d_pred_flip = model(None, keypoints_2d_batch_cpn[:, 1], keypoints_2d_batch_cpn_crop[:, 1].clone())
 					keypoints_3d_pred_flip = model(images_batch[:, 1], keypoints_2d_batch_cpn[:, 1], keypoints_2d_batch_cpn_crop[:, 1].clone())
 					keypoints_3d_pred_flip[:, :, :, 0] *= -1
 					keypoints_3d_pred_flip[:, :, joints_left + joints_right] = keypoints_3d_pred_flip[:, :, joints_right + joints_left]
@@ -242,22 +220,10 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 
 
 				else:    
-					# keypoints_3d_pred = model(None, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop)
 					keypoints_3d_pred = model(images_batch, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop)
 
-			# batch_size, n_views, image_shape = images_batch.shape[0], images_batch.shape[1], tuple(images_batch.shape[3:])
 			n_joints = keypoints_3d_pred.shape[1]
 
-			# images_batch_copy = images_batch_copy.cpu().numpy()
-			# keypoints_2d_cpn = keypoints_2d_batch_cpn_crop[:, 0].cpu().numpy()
-			# keypoints_2d_gt = keypoints_2d_batch_gt_crop[:, 0].cpu().numpy()
-
-			# for idx in range(len(list_offsets)):
-			# 	list_offsets[idx] = list_offsets[idx].cpu().numpy()
-			# 	list_weights[idx] = list_weights[idx].cpu().numpy()
-
-			# img.draw_pic(images_batch_copy, keypoints_2d_cpn, keypoints_2d_gt, list_offsets, list_weights, index)
-			# index += images_batch_copy.shape[0]
 
 			# calculate loss
 			total_loss = 0.0
@@ -265,15 +231,6 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 
 			total_loss += loss
 			metric_dict[config.loss.criterion].append(loss.item())
-
-			# # volumetric ce loss
-			# if config.loss.use_volumetric_ce_loss :
-			#     volumetric_ce_criterion = VolumetricCELoss()
-
-			#     loss = volumetric_ce_criterion(coord_volumes_pred, volumes_pred, keypoints_3d_gt, keypoints_binary_validity_gt)
-			#     metric_dict['volumetric_ce_loss'].append(loss.item())
-
-			#     total_loss += config.loss.volumetric_ce_loss_weight * loss
 
 			metric_dict['total_loss'].append(total_loss.item())
 
@@ -290,22 +247,12 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 					if config.loss.grad_clip:
 						torch.nn.utils.clip_grad_norm_(model.parameters(), config.loss.grad_clip / config.train.volume_net_lr)
 
-					# metric_dict['grad_norm_times_volume_net_lr'].append(config.train.volume_net_lr * misc.calc_gradient_norm(filter(lambda x: x[1].requires_grad, model.named_parameters())))
-					# if lr is not None:
-					#     for key in lr.keys():
-					#         metric_dict['lr_{}'.format(key)].append(lr[key])
-
-					# for key in opt_dict.keys():
-					#     opt_dict[key].step()
 					optimizer.step()
 
 			# save answers for evalulation
 			if not is_train:
 				results['keypoints_gt'].append(keypoints_3d_gt.detach())    # (b, 17, 3)
 				results['keypoints_3d'].append(keypoints_3d_pred.detach())    # (b, 17, 3)
-				# results['keypoints_gt'].append(keypoints_3d_gt.detach().cpu().numpy())    # (b, 17, 3)
-				# results['keypoints_3d'].append(keypoints_3d_pred.detach().cpu().numpy())    # (b, 17, 3)
-				# results['indexes'].append(batch['indexes'])
 
 			batch = prefetcher.next()
 
@@ -424,25 +371,27 @@ def main(args):
 			print("Failed loading weights for {} model as no checkpoint found at {}".format(config.model.name, checkpoint_path))
 
 	elif config.model.backbone.init_weights:
-		# ret = model.backbone.load_state_dict(torch.load(config.model.backbone.checkpoint), strict=False)
-		# print(ret)
-		state_dict = torch.load(config.model.backbone.checkpoint, map_location=device)['state_dict']
-		for key in list(state_dict.keys()):
-			new_key = key.replace("module.", "")
-			state_dict[new_key] = state_dict.pop(key)
-		ret = model.backbone.load_state_dict(state_dict, strict=True)
+		# Load HRNet
+		ret = model.backbone.load_state_dict(torch.load(config.model.backbone.checkpoint), strict=False)
+		# Load CPN
+		# state_dict = torch.load(config.model.backbone.checkpoint, map_location=device)['state_dict']
+		# for key in list(state_dict.keys()):
+		# 	new_key = key.replace("module.", "")
+		# 	state_dict[new_key] = state_dict.pop(key)
+		# ret = model.backbone.load_state_dict(state_dict, strict=True)
 		print(ret)
 		print("Loading backbone from {}".format(config.model.backbone.checkpoint))
 
 	if args.eval:
-		checkpoint = torch.load("checkpoint/best_epoch_CPNN.bin")['model']
+		checkpoint = torch.load("checkpoint/best_epoch.bin")['model']
 		for key in list(checkpoint.keys()):
 			new_key = key.replace("module.", "")
 			checkpoint[new_key] = checkpoint.pop(key)
 
-		model.load_state_dict(checkpoint, strict=True)
+		ret = model.load_state_dict(checkpoint, strict=False)
+		print(ret)
 		# model.load_state_dict(checkpoint['model'], strict=True)
-		print("Loading checkpoint from {}".format("checkpoint/best_epoch_CPNN.bin"))
+		print("Loading checkpoint from {}".format("checkpoint/best_epoch.bin"))
 
 	# sync bn in multi-gpus
 	if args.sync_bn:
@@ -493,13 +442,7 @@ def main(args):
 				"lr": config.train.volume_net_lr * 0.1,
 			},
 			]
-			# params_3d = [{'params': model.volume_net.parameters(), 'lr': config.train.volume_net_lr}]
-			# opt_3d = optim.Adam(params_3d)
 			optimizer = optim.AdamW(param_dicts, weight_decay=0.1)
-			# lr_schd_3d = optim.lr_scheduler.MultiStepLR(opt_3d, config.train.volume_net_lr_step, config.train.volume_net_lr_factor)
-			# opt_dict.update({'3d': opt_3d})
-			# lr_schd_dict.update({'3d': lr_schd_3d})
-			# lr_dict.update({'3d': config.train.volume_net_lr})
 		else:
 			assert 0, "Only support vol optimizer."
 		# load optimizer if has
@@ -601,25 +544,6 @@ def main(args):
 			for param_group in optimizer.param_groups:
 				param_group['lr'] *= lr_decay
 
-			#     checkpoint_dir = os.path.join(experiment_dir, "checkpoints", "{:04}".format(epoch))
-			#     os.makedirs(checkpoint_dir, exist_ok=True)
-
-			#     torch.save(model.state_dict(), os.path.join(checkpoint_dir, "weights.pth"))
-			#     torch.save(os.path.join(checkpoint_dir, "weights.pth"), os.path.join(config.logdir, "resume_weights_path.pth"))
-			#     if config.model.name == 'vol':
-			#         if config.model.backbone.fix_weights:
-			#             torch.save({'optimizer_3d': opt_dict['3d'].state_dict(), \
-			#                         'scheduler_3d': lr_schd_dict['3d'].state_dict()}, \
-			#                         os.path.join(checkpoint_dir, "optimizer.pth"))
-			#         else:
-			#             torch.save({'optimizer_2d': opt_dict['2d'].state_dict(), \
-			#                         'optimizer_3d': opt_dict['3d'].state_dict(), \
-			#                         'scheduler_2d': lr_schd_dict['2d'].state_dict(), \
-			#                         'scheduler_3d': lr_schd_dict['3d'].state_dict()}, \
-			#                         os.path.join(checkpoint_dir, "optimizer.pth"))
-			#     else:
-			#         assert 0, "only support saving vol model."
-			# print("{} iters done.".format(n_iters_total_train))
 	else:
 		errors_p1 = []
 		errors_p2 = []
@@ -628,19 +552,20 @@ def main(args):
 
 		result = one_epoch_full(model, criterion, None, config, val_dataloader, device, None, n_iters_total=0, is_train=False, master=master, experiment_dir=experiment_dir, writer=writer, whole_val_dataloader=whole_val_dataloader, dist_size=dist_size)
 
-		for k in result.keys():
-			print(k, "p1:", result[k]['MPJPE'] * 1000, "p2:", result[k]['P_MPJPE'] * 1000, "e_vel:", result[k]['MPJVE'] * 1000)
-			errors_p1.append(result[k]['MPJPE'] * 1000)
-			errors_p2.append(result[k]['P_MPJPE'] * 1000)
-			# errors_p3.append(result[k]['N_MPJPE'] * 1000)
-			errors_vel.append(result[k]['MPJVE'] * 1000)
+		if master:
+			for k in result.keys():
+				print(k, "p1:", result[k]['MPJPE'] * 1000, "p2:", result[k]['P_MPJPE'] * 1000, "e_vel:", result[k]['MPJVE'] * 1000)
+				errors_p1.append(result[k]['MPJPE'] * 1000)
+				errors_p2.append(result[k]['P_MPJPE'] * 1000)
+				# errors_p3.append(result[k]['N_MPJPE'] * 1000)
+				errors_vel.append(result[k]['MPJVE'] * 1000)
 
-		error_p1 = round(np.mean(errors_p1), 1)
-		error_p2 = round(np.mean(errors_p2), 1)
-		error_vel = round(np.mean(errors_vel), 2)
-		print("avg", "p1:", error_p1, "p2:", error_p2, "MPJVE:", error_vel)
+			error_p1 = round(np.mean(errors_p1), 1)
+			error_p2 = round(np.mean(errors_p2), 1)
+			error_vel = round(np.mean(errors_vel), 2)
+			print("avg", "p1:", error_p1, "p2:", error_p2, "MPJVE:", error_vel)
 
-	print("Done.")
+			print("Done.")
 
 if __name__ == '__main__':
 	args = parse_args()

@@ -22,12 +22,8 @@ class data_prefetcher():
         self.flip_test = flip_test
         # self.mean = torch.tensor([122.7717, 115.9465, 102.9801]).cuda().to(device).view(1, 1, 1, 3)
         # self.mean /= 255.
-        # self.mean = torch.tensor([0.485, 0.456, 0.406]).cuda().to(device).view(1, 1, 1, 1, 3)
-        # self.std = torch.tensor([0.229, 0.224, 0.225]).cuda().to(device).view(1, 1, 1, 1, 3)
-        # With Amp, it isn't necessary to manually convert data to half.
-        # if args.fp16:
-        #     self.mean = self.mean.half()
-        #     self.std = self.std.half()
+        self.mean = torch.tensor([0.485, 0.456, 0.406]).cuda().to(device).view(1, 1, 1, 3)
+        self.std = torch.tensor([0.229, 0.224, 0.225]).cuda().to(device).view(1, 1, 1, 3)
         self.preload()
 
     def preload(self):
@@ -40,62 +36,51 @@ class data_prefetcher():
             for i in range(len(self.next_batch)):
                 self.next_batch[i] = self.next_batch[i].cuda(non_blocking=True).to(self.device)
 
-            keypoints_3d_gt, keypoints_2d_batch_cpn = self.next_batch
-            # keypoints_3d_gt, keypoints_2d_batch_cpn, feats_4x_batch, feats_8x_batch, feats_16x_batch, feats_32x_batch = self.next_batch
+            images_batch, keypoints_3d_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop = self.next_batch
 
-            # images_batch, keypoints_3d_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop = self.next_batch
-            # [512, 3, 256, 192, 3] [512, 1, 17, 3] [512, 3, 17, 2] [512, 3, 17, 2]
-
-            # images_batch = torch.flip(images_batch, [-1])
+            images_batch = torch.flip(images_batch, [-1])
 
             # images_batch = images_batch / 255.0 - self.mean # for CPN
-            # images_batch = (images_batch / 255.0 - self.mean) / self.std # for other backbones
-
+            images_batch = (images_batch / 255.0 - self.mean) / self.std
             keypoints_3d_gt[:, :, 1:] -= keypoints_3d_gt[:, :, :1]
             keypoints_3d_gt[:, :, 0] = 0
 
-            p = random.random()
+            if random.random() <= 0.5 and self.is_train:
+                images_batch = torch.flip(images_batch, [2])
 
-            if p <= 0.5 and self.is_train:
-                # images_batch = torch.flip(images_batch, [3])
+                keypoints_2d_batch_cpn[:, :, 0] *= -1
+                keypoints_2d_batch_cpn[:, joints_left + joints_right] = keypoints_2d_batch_cpn[:, joints_right + joints_left]
 
-                keypoints_2d_batch_cpn[:, :, :, 0] *= -1
-                keypoints_2d_batch_cpn[:, :, joints_left + joints_right] = keypoints_2d_batch_cpn[:, :, joints_right + joints_left]
-
-                # keypoints_2d_batch_cpn_crop[:, :, :, 0] = 192 - keypoints_2d_batch_cpn_crop[:, :, :, 0] - 1
-                # keypoints_2d_batch_cpn_crop[:, :, joints_left + joints_right] = keypoints_2d_batch_cpn_crop[:, :, joints_right + joints_left]
+                keypoints_2d_batch_cpn_crop[:, :, 0] = 192 - keypoints_2d_batch_cpn_crop[:, :, 0] - 1
+                keypoints_2d_batch_cpn_crop[:, joints_left + joints_right] = keypoints_2d_batch_cpn_crop[:, joints_right + joints_left]
 
                 keypoints_3d_gt[:, :, :, 0] *= -1
                 keypoints_3d_gt[:, :, joints_left + joints_right] = keypoints_3d_gt[:, :, joints_right + joints_left]
 
-                # feats_4x_batch = feats_4x_batch[:, :, 0]
-                # feats_8x_batch = feats_8x_batch[:, :, 0]
-                # feats_16x_batch = feats_16x_batch[:, :, 0]
-                # feats_32x_batch = feats_32x_batch[:, :, 0]
-
-            elif p > 0.5 and self.is_train:
-                pass
-                # feats_4x_batch = feats_4x_batch[:, :, 1]
-                # feats_8x_batch = feats_8x_batch[:, :, 1]
-                # feats_16x_batch = feats_16x_batch[:, :, 1]
-                # feats_32x_batch = feats_32x_batch[:, :, 1]
-
             if (not self.is_train) and self.flip_test:
+                images_batch = torch.stack([images_batch, torch.flip(images_batch,[2])], dim=1)
+
                 keypoints_2d_batch_cpn_flip = keypoints_2d_batch_cpn.clone()
-                keypoints_2d_batch_cpn_flip[:, :, :, 0] *= -1
-                keypoints_2d_batch_cpn_flip[:, :, joints_left + joints_right] = keypoints_2d_batch_cpn_flip[:, :, joints_right + joints_left]
+                keypoints_2d_batch_cpn_flip[:, :, 0] *= -1
+                keypoints_2d_batch_cpn_flip[:, joints_left + joints_right] = keypoints_2d_batch_cpn_flip[:, joints_right + joints_left]
                 keypoints_2d_batch_cpn = torch.stack([keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_flip], dim=1)
+                # keypoints_2d_batch_cpn = torch.cat([keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_flip], dim=0)
 
-                # keypoints_2d_batch_cpn_crop_flip = keypoints_2d_batch_cpn_crop.clone()
-                # keypoints_2d_batch_cpn_crop_flip[:, :, :, 0] = 192 - keypoints_2d_batch_cpn_crop_flip[:, :, :, 0] - 1
-                # keypoints_2d_batch_cpn_crop_flip[:, :, joints_left + joints_right] = keypoints_2d_batch_cpn_crop_flip[:, :, joints_right + joints_left]
-                # keypoints_2d_batch_cpn_crop = torch.stack([keypoints_2d_batch_cpn_crop, keypoints_2d_batch_cpn_crop_flip], dim=1)
+                keypoints_2d_batch_cpn_crop_flip = keypoints_2d_batch_cpn_crop.clone()
+                keypoints_2d_batch_cpn_crop_flip[:, :, 0] = 192 - keypoints_2d_batch_cpn_crop_flip[:, :, 0] - 1
+                keypoints_2d_batch_cpn_crop_flip[:, joints_left + joints_right] = keypoints_2d_batch_cpn_crop_flip[:, joints_right + joints_left]
+                keypoints_2d_batch_cpn_crop = torch.stack([keypoints_2d_batch_cpn_crop, keypoints_2d_batch_cpn_crop_flip], dim=1)
 
-                del keypoints_2d_batch_cpn_flip#, keypoints_2d_batch_cpn_crop_flip
-              
-            self.next_batch = [keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float()]  
-            # self.next_batch = [keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), feats_4x_batch.float(), feats_8x_batch.float(), feats_16x_batch.float(), feats_32x_batch.float()]  
-            # self.next_batch = [images_batch.float(), keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), keypoints_2d_batch_cpn_crop.float()]
+                # keypoints_2d_batch_gt_crop_flip = keypoints_2d_batch_gt_crop.clone()
+                # keypoints_2d_batch_gt_crop_flip[:, :, 0] = 192 - keypoints_2d_batch_gt_crop_flip[:, :, 0] - 1
+                # keypoints_2d_batch_gt_crop_flip[:, joints_left + joints_right] = keypoints_2d_batch_gt_crop_flip[:, joints_right + joints_left]
+                # keypoints_2d_batch_gt_crop = torch.stack([keypoints_2d_batch_gt_crop, keypoints_2d_batch_gt_crop_flip], dim=1)
+                # keypoints_2d_batch_cpn_crop = torch.cat([keypoints_2d_batch_cpn_crop, keypoints_2d_batch_cpn_crop_flip], dim=0)
+                del keypoints_2d_batch_cpn_flip, keypoints_2d_batch_cpn_crop_flip
+
+            # self.next_batch = [keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), keypoints_2d_batch_cpn_crop.float()]
+            self.next_batch = [images_batch.float(), keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), keypoints_2d_batch_cpn_crop.float()]
+            # self.next_batch = [images_batch_copy, images_batch.float(), keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), keypoints_2d_batch_cpn_crop.float(), keypoints_2d_batch_gt_crop.float()]
 
 
     def next(self):

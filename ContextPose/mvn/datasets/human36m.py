@@ -266,73 +266,7 @@ class Human36MMultiViewDataset(Dataset):
         with open(labels_path, 'rb') as f:  
             self.labels = pickle.loads(f.read())
 
-        # if test:
-        #     with open("data/h36m_validation_feat.pkl", 'rb') as f:  
-        #         self.feats = pickle.loads(f.read())
-        #     print("Test data done.")
-        # else:
-        #     with open("data/h36m_train_feat.pkl", 'rb') as f:  
-        #         self.feats = pickle.loads(f.read())
-        #     print("Training data done.")
-
-        # self.labels = [label for label in self.labels if label['video_id'] == 600]
-     
-        # dict_keys(['image', 'joints_2d_gt', 'joints_2d_cpn', 'joints_3d', 'joints_vis', 
-        #            'video_id', 'image_id', 'subject', 'action', 'subaction', 'camera_id', 'source', 
-        #            'camera', 'center', 'scale', 'box', 'joints_2d_gt_crop', 'joints_2d_cpn_crop'])
-
-        # n_cameras = len(self.labels['camera_names'])
-        # assert all(camera_idx in range(n_cameras) for camera_idx in self.ignore_cameras)
-
-        # train_subjects = ['S1', 'S5', 'S6', 'S7', 'S8']
-        # test_subjects = ['S9', 'S11']
-
-        # train_subjects = list(self.labels['subject_names'].index(x) for x in train_subjects)
-        # test_subjects  = list(self.labels['subject_names'].index(x) for x in test_subjects)
-
-        # train_size = np.isin(self.labels['table']['subject_idx'], train_subjects, assume_unique=True).sum()
-
-        #############################################
-        # cross subject training
-        # train_subjects = ['S1']
-        # train_subjects = list(self.labels['subject_names'].index(x) for x in train_subjects)
-        #############################################
-
-        # indices = []
-        # if train:
-        #     mask = np.isin(self.labels['table']['subject_idx'], train_subjects, assume_unique=True)
-        #     indices.append(np.nonzero(mask)[0])
-        # if test:
-        #     mask = np.isin(self.labels['table']['subject_idx'], test_subjects, assume_unique=True)
-
-        #     if not with_damaged_actions:
-        #         mask_S9 = self.labels['table']['subject_idx'] == self.labels['subject_names'].index('S9')
-
-        #         damaged_actions = 'Greeting-2', 'SittingDown-2', 'Waiting-1'
-        #         damaged_actions = [self.labels['action_names'].index(x) for x in damaged_actions]
-        #         mask_damaged_actions = np.isin(self.labels['table']['action_idx'], damaged_actions)
-
-        #         mask &= ~(mask_S9 & mask_damaged_actions)
-
-        #     indices.append(np.nonzero(mask)[0][::retain_every_n_frames_in_test])
-        
-        # self.labels['table'] = self.labels['table'][np.concatenate(indices)]
-        # if test and False:
-        #     self.labels['table'] = self.labels['table'].reshape(len(self.labels['table']), 1).repeat(4, axis = 1).reshape(4 * len(self.labels['table']))
-
-        # self.num_keypoints = 16 if kind == "mpii" else 17
-        # assert self.labels['table']['keypoints'].shape[1] == 17, "Use a newer 'labels' file"
-
         self.keypoints_3d_pred = None
-        # if pred_results_path is not None:
-        #     pred_results = np.load(pred_results_path, allow_pickle=True)
-        #     keypoints_3d_pred = pred_results['keypoints_3d'][np.argsort(pred_results['indexes'])]
-        #     self.keypoints_3d_pred = keypoints_3d_pred[::retain_every_n_frames_in_test]
-        #     indices_cat = np.concatenate(indices)
-        #     self.keypoints_3d_pred = self.keypoints_3d_pred[indices_cat - train_size]
-        #     assert len(self.keypoints_3d_pred) == len(self), \
-        #         f"[train={train}, test={test}] {labels_path} has {len(self)} samples, but '{pred_results_path}' " + \
-        #         f"has {len(self.keypoints_3d_pred)}. Did you follow all preprocessing instructions carefully?"
 
     def get_mapping(self):
         union_keys = list(self.union_joints.keys())
@@ -350,68 +284,27 @@ class Human36MMultiViewDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        pad = 121
         shot = self.labels[idx]
         
-        # # load image
-        # image_dir = self.root
-        # subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
-        # image_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}_{:06d}.jpg'
+        # load image
+        image_dir = self.root
+        subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
+        subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1)
+        image_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}_{:06d}.jpg'
+        imagename = image_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1, shot['image_id'])
+        image_path = os.path.join(subdir, imagename)
 
-        # subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1)
+        image = cv2.imread(
+            os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
+            )#[..., ::-1]#.astype('float32')
 
-        # frame_number = len(os.listdir(os.path.join(image_dir, subdir))) # incorrect!
-        frame_number = shot['nposes']
-        frame_idx = shot['image_id']
-        frame_min = idx - frame_idx + 1 # start here, 1
-        frame_max = frame_min + frame_number - 1
+        if self.crop:
+            # crop image
+            image = crop_image(image, shot['center'], shot['scale'], self.image_shape) # (256, 192, 3) uint8
 
-        start = max(frame_min, idx - pad)
-        end = min(idx + pad, frame_max)
-
-        shots = self.labels[start:end+1]
-        # feats = self.feats[start:end+1]
-
-        input_2d = np.array([element['joints_2d_cpn'] for element in shots])
-        # feats_4x = np.array([element['feat_4x'] for element in feats])
-        # feats_8x = np.array([element['feat_8x'] for element in feats])
-        # feats_16x = np.array([element['feat_16x'] for element in feats])
-        # feats_32x = np.array([element['feat_32x'] for element in feats])
-        # input_3d = np.array([shot['joints_3d'] for shot in shots])
-
-        # images = np.zeros((input_2d.shape[0], 256, 192, 3))
-
-        # for i in range(len(shots)):
-        #     element = shots[i]
-        #     imagename = image_format.format(element['subject'], element['action'], element['subaction'], element['camera_id']+1, element['image_id'])
-        #     image_path = os.path.join(subdir, imagename)
-
-        #     image = cv2.imread(
-        #         os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
-        #         )#[..., ::-1]#.astype('float32')
-
-        #     if self.crop:
-        #         # crop image
-        #         image = crop_image(image, element['center'], element['scale'], self.image_shape) # (256, 192, 3) uint8
-        #         images[i] = image
-
-        left_pad, right_pad = 0, 0
-        if input_2d.shape[0] != 2*pad + 1:
-            if idx - pad < start:
-                left_pad = start - (idx - pad)
-            if idx + pad > end:
-                right_pad = idx + pad - end
-            # f, 2, 17, 32
-            input_2d = np.pad(input_2d, ((left_pad, right_pad), (0, 0), (0, 0)), 'edge')
-            # feats_4x = np.pad(feats_4x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-            # feats_8x = np.pad(feats_8x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-            # feats_16x = np.pad(feats_16x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-            # feats_32x = np.pad(feats_32x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-
-        return np.expand_dims(shot['joints_3d'], axis=0), input_2d#, feats_4x, feats_8x, feats_16x, feats_32x
-        # return images, np.expand_dims(shot['joints_3d'], axis=0), input_2d, input_2d_crop
+        # return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_gt'], shot['joints_2d_gt_crop']
         # return np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
-        # return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
+        return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
 
     def evaluate_using_per_pose_error(self, per_pose_error, split_by_subject):
         def evaluate_by_actions(self, per_pose_error, mask=None):
@@ -541,50 +434,8 @@ class Human36MMultiViewDataset(Dataset):
                 '`keypoints_3d_predicted` shape should be %s, got %s' % \
                 (keypoints_gt.shape, keypoints_3d_predicted.shape))
 
-        # if transfer_cmu_to_human36m or transfer_human36m_to_human36m:
-        #     human36m_joints = [10, 11, 15, 14, 1, 4]
-        #     if transfer_human36m_to_human36m:
-        #         cmu_joints = [10, 11, 15, 14, 1, 4]
-        #     else:
-        #         cmu_joints = [10, 8, 9, 7, 14, 13]
-
-        #     keypoints_gt = keypoints_gt[:, human36m_joints]
-        #     keypoints_3d_predicted = keypoints_3d_predicted[:, cmu_joints]
-            
-        # mean error per 16/17 joints in mm, for each pose
-        # per_pose_error = np.sqrt(((keypoints_gt - keypoints_3d_predicted) ** 2).sum(2)).mean(1)
-
-        # relative mean error per 16/17 joints in mm, for each pose
-        # if not (transfer_cmu_to_human36m or transfer_human36m_to_human36m):
-        #     root_index = 6 if self.kind == "mpii" else 6
-        # else:
-        #     root_index = 0
-
-        # keypoints_gt_relative = keypoints_gt - keypoints_gt[:, root_index:root_index + 1, :]
-        # keypoints_3d_predicted_relative = keypoints_3d_predicted - keypoints_3d_predicted[:, root_index:root_index + 1, :]
-
-        # per_pose_error_relative = np.sqrt(((keypoints_gt_relative - keypoints_3d_predicted_relative) ** 2).sum(2)).mean(1)
-
-        # result = {
-        #     # 'per_pose_error': self.evaluate_using_per_pose_error(per_pose_error, split_by_subject),
-        #     # 'per_pose_error_relative': self.evaluate_using_per_pose_error(per_pose_error_relative, split_by_subject)
-        # }
 
         result = self.evaluate_using_pred(keypoints_gt, keypoints_3d_predicted)
-
-        # # project to 2d, evaluate 2d
-        # if proj_matricies_batch is not None:
-        #     nsamples = keypoints_gt.shape[0]
-        #     keypoints_2d_gt = np.array([project_3d_points_to_image_plane_without_distortion(proj_matricies_batch[n, 0], keypoints_gt[n]) for n in range(nsamples)])[:, np.newaxis]
-        #     keypoints_2d_pred = np.array([project_3d_points_to_image_plane_without_distortion(proj_matricies_batch[n, 0], keypoints_3d_predicted[n]) for n in range(nsamples)])[:, np.newaxis]
-        #     name_values_dict, mean_rate_dict = self.evaluate2d(keypoints_2d_gt, keypoints_2d_pred, [0.1, 0.2, 0.3, 0.4, 0.5], config)
-
-        #     result.update({
-        #         'pose_2d_metric': {
-        #             'per_joint_pckh': name_values_dict, 
-        #             'avg_joint_pckh': mean_rate_dict
-        #         }
-        #     })
 
         return result
         # return result['per_pose_error_relative']['Average']['Average'], result
@@ -687,23 +538,6 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
 
 
     def prepare_labels(self, rank, world_size):
-        # self.camera_idxes, idxes = [], []
-        # for idx in range(len(self.labels['table'])):
-            # for camera_idx, _ in enumerate(self.labels['camera_names']):
-            # load bounding box
-            #     bbox = shot['bbox_by_camera_tlbr'][camera_idx][[1,0,3,2]] # TLBR to LTRB
-            #     bbox_height = bbox[2] - bbox[0]
-            #     if bbox_height != 0:
-            #         self.camera_idxes.append(camera_idx)
-            #         idxes.append(idx)
-
-        # self.labels['table'] = self.labels['table'][idxes]
-
-        # if self.pred_results_path is not None:
-        #     self.keypoints_3d_pred = self.keypoints_3d_pred[idxes]
-        # else:
-        #     self.keypoints_3d_pred = None
-
         if rank is not None and world_size is not None:
             n = len(self.labels) // world_size
             # n = len(self.labels['table']) // world_size
@@ -722,65 +556,37 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
             return dist_size
 
     def __getitem__(self, idx):
-        pad = 121
         shot = self.labels[idx]
 
-        # # load image
-        # image_dir = self.root
-        # subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
-        # image_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}_{:06d}.jpg'
+        # load image
+        image_dir = self.root
+        subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
+        subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1)
+        image_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}_{:06d}.jpg'
+        imagename = image_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1, shot['image_id'])
+        image_path = os.path.join(subdir, imagename)
 
-        # subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1)
+        image = cv2.imread(
+            os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
+            )#[..., ::-1]#.astype('float32')
 
-        # frame_number = len(os.listdir(os.path.join(image_dir, subdir))) # incorrect!
-        frame_number = shot['nposes']
-        frame_idx = shot['image_id']
-        frame_min = idx - frame_idx + 1 # start here, 1
-        frame_max = frame_min + frame_number - 1
+        if self.crop:
+            # crop image
+            image = crop_image(image, shot['center'], shot['scale'], self.image_shape) # (256, 192, 3) uint8
 
-        start = max(frame_min, idx - pad)
-        end = min(idx + pad, frame_max)
+        # if self.norm_image:
+        #     image = normalize_image(image)
 
-        shots = self.labels[start:end+1]
-        # feats = self.feats[start:end+1]
+        # keypoints_2d_cpn = shot['joints_2d_cpn']#.astype('float32')
+        # keypoints_2d_cpn_crop = shot['joints_2d_cpn_crop']#.astype('float32')
 
-        input_2d = np.array([element['joints_2d_cpn'] for element in shots])
-        # feats_4x = np.array([element['feat_4x'] for element in feats])
-        # feats_8x = np.array([element['feat_8x'] for element in feats])
-        # feats_16x = np.array([element['feat_16x'] for element in feats])
-        # feats_32x = np.array([element['feat_32x'] for element in feats])
+        # keypoints_3d_gt = shot['joints_3d']#.astype('float32')
+        # keypoints_3d_gt[1:] -= keypoints_3d_gt[:1]
+        # keypoints_3d_gt[0] = 0
 
-        # images = np.zeros((input_2d.shape[0], 256, 192, 3))
+        # return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_gt'], shot['joints_2d_gt_crop']
+        return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
+        # return np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
 
-        # for i in range(len(shots)):
-        #     element = shots[i]
-        #     imagename = image_format.format(element['subject'], element['action'], element['subaction'], element['camera_id']+1, element['image_id'])
-        #     image_path = os.path.join(subdir, imagename)
-
-        #     image = cv2.imread(
-        #         os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
-        #         )#[..., ::-1]#.astype('float32')
-
-        #     if self.crop:
-        #         # crop image
-        #         image = crop_image(image, element['center'], element['scale'], self.image_shape) # (256, 192, 3) uint8
-        #         images[i] = image
-
-        left_pad, right_pad = 0, 0
-        if input_2d.shape[0] != 2*pad + 1:
-            if idx - pad < start:
-                left_pad = start - (idx - pad)
-            if idx + pad > end:
-                right_pad = idx + pad - end
-
-            input_2d = np.pad(input_2d, ((left_pad, right_pad), (0, 0), (0, 0)), 'edge')
-            # feats_4x = np.pad(feats_4x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-            # feats_8x = np.pad(feats_8x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-            # feats_16x = np.pad(feats_16x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-            # feats_32x = np.pad(feats_32x, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
-
-        return np.expand_dims(shot['joints_3d'], axis=0), input_2d#, feats_4x, feats_8x, feats_16x, feats_32x
-
-        # return images, np.expand_dims(shot['joints_3d'], axis=0), input_2d, input_2d_crop
 
 

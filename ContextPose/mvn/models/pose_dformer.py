@@ -17,9 +17,6 @@ from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 from timm.models.registry import register_model
 
 
-# torch.autograd.set_detect_anomaly(True)
-
-
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
@@ -151,7 +148,7 @@ class DeformableBlock(nn.Module):
         x = x + self.drop_path(self.mlp(self.norm2(x)))
 
         x = torch.cat([x_0,x], dim=1)
-        return x 
+        return x
 
 
 class PoseTransformer(nn.Module):
@@ -178,10 +175,9 @@ class PoseTransformer(nn.Module):
 
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
         # embed_dim_ratio = config.embed_dim_ratio
-        embed_dim_ratio = 32
+        embed_dim_ratio = 128
         # depth = config.depth
         depth = 4
-        # embed_dim = 2048
         # embed_dim = embed_dim_ratio * num_joints   #### temporal embed_dim is num_joints * spatial embedding dim ratio
         out_dim = 3    #### output dimension is num_joints * 3
         # self.levels = config.levels
@@ -192,21 +188,15 @@ class PoseTransformer(nn.Module):
         self.coord_embed = nn.Linear(in_chans, embed_dim_ratio)
         self.feat_embed = nn.ModuleList([
             nn.Linear(32, embed_dim_ratio),
-            nn.Linear(32, embed_dim_ratio),
-            nn.Linear(32, embed_dim_ratio),
-            nn.Linear(32, embed_dim_ratio),
+            nn.Linear(64, embed_dim_ratio),
+            nn.Linear(128, embed_dim_ratio),
+            nn.Linear(256, embed_dim_ratio),
             ])
 
         self.Spatial_pos_embed = nn.Parameter(torch.zeros(1, 1+self.levels, num_joints, embed_dim_ratio))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
-
-        self.temporal_blocks = nn.ModuleList([
-            Block(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
-            for i in range(depth)])
 
         self.joint_blocks = nn.ModuleList([
             Block(
@@ -220,41 +210,36 @@ class PoseTransformer(nn.Module):
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
 
-        # self.context_blocks = nn.ModuleList([
-        #     DeformableBlock(dim=embed_dim_ratio, num_heads=4, num_samples=4, qkv_bias=qkv_bias, drop_path=dpr[i])
-        #     for i in range(depth)])
-
-        self.weighted_mean = torch.nn.Conv1d(in_channels=3, out_channels=1, kernel_size=1)
+        self.context_blocks = nn.ModuleList([
+            DeformableBlock(dim=embed_dim_ratio, num_heads=4, num_samples=4, qkv_bias=qkv_bias, drop_path=dpr[i])
+            for i in range(depth)])
 
         self.head = nn.Sequential(
             nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, out_dim),
         )
 
-    def forward(self, keypoints_2d, features_list):
+    def forward(self, keypoints_2d, ref, features_list):
         b, p, c = keypoints_2d.shape
         ### now x is [batch_size, 2 channels, receptive frames, joint_num], following image data
 
         x = self.coord_embed(keypoints_2d)
 
-        # features_ref_list = [
-        #     F.grid_sample(features, ref.unsqueeze(-2), align_corners=True).squeeze(-1).permute(0, 2, 1).contiguous() \
-        #     for features in features_list]
+        features_ref_list = [
+            F.grid_sample(features, ref.unsqueeze(-2), align_corners=True).squeeze(-1).permute(0, 2, 1).contiguous() \
+            for features in features_list]
 
-        features_ref_list = [embed(features_list[idx]) \
+        features_ref_list = [embed(features_ref_list[idx]) \
                              for idx, embed in enumerate(self.feat_embed)]
 
         x = torch.stack([x,*features_ref_list], dim=1) # [b, 5, p, c]
 
-        # x = x.view(b, 1, p, -1)
-
         x += self.Spatial_pos_embed
         x = self.pos_drop(x)
-
-        # x = rearrange(x, 'b l p c -> b p (l c)')
         
-        # for blk in self.context_blocks:
-        #     x = blk(x, ref, features_list)
+        for blk in self.context_blocks:
+            x = blk(x, ref, features_list)
+
         x = rearrange(x, 'b l p c -> (b p) l c')
 
         for blk in self.res_blocks:
@@ -264,14 +249,6 @@ class PoseTransformer(nn.Module):
         for blk in self.joint_blocks:
             x = blk(x)
 
-        x = x.view(b//3, 3, p, -1)
-        x = rearrange(x, 'b f p c -> (b p) f c')
-        for blk in self.temporal_blocks:
-            x = blk(x)
-        x = rearrange(x, '(b p) f c -> b f (p c)', p=p)
-
-        x = self.weighted_mean(x).view(b//3, 1, p, -1)
-        x = self.head(x)
-        # [128, 1, 17, 3]
+        x = self.head(x).view(b, 1, p, -1)
         return x
 
