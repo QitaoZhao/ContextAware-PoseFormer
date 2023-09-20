@@ -11,11 +11,8 @@ from os import makedirs
 from tqdm import tqdm
 import cdflib
 import sys
-from h36m_dataset import Human36mDataset
 from common.camera import *
 
-from config import cfg
-from config import update_config
 from transform import get_affine_transform, affine_transform, \
     normalize_screen_coordinates, _infer_box, _weak_project 
 from metadata import load_h36m_metadata
