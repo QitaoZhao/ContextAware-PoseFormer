@@ -159,6 +159,7 @@ if __name__ == '__main__':
                             datum['camera_id'] = c-1
                             datum['source'] = 'h36m'
                             datum['camera'] = camera_dict
+                            datum['nposes'] = nposes
 
                             box = _infer_box(datum['joints_3d'], camera_dict, 0)
                             center = (0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3]))
