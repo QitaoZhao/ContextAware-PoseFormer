@@ -77,6 +77,14 @@ Here is an example log where I trained this model using 4 Nvidia 3090 GPUs. `3d_
 
 ![log](./images/log.png)
 
+If you want to train on multiple frames, run the following:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_video.yaml --frame 81 --logdir ./logs
+```
+
+Note: The config and dataset files are different from those for the single frame case. The number of video frames is set by `--frame 81`. **This feature is not carefully tested.**
+
 ### Test
 
 The checkpoint corresponding to the log above is available [here](https://drive.google.com/file/d/1nh8BLCyEFaoRGhb_sFmwvU5xWJLlATi4/view?usp=sharin). You should get 41.3mm MPJPE using this checkpoint. Place the trained model (`best_epoch.bin`) under `code_root/ContextPose-PyTorch-release/checkpoint/`, and run:

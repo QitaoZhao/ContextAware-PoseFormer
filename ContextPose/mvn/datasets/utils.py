@@ -22,8 +22,8 @@ class data_prefetcher():
         self.flip_test = flip_test
         # self.mean = torch.tensor([122.7717, 115.9465, 102.9801]).cuda().to(device).view(1, 1, 1, 3)
         # self.mean /= 255.
-        self.mean = torch.tensor([0.485, 0.456, 0.406]).cuda().to(device).view(1, 1, 1, 3)
-        self.std = torch.tensor([0.229, 0.224, 0.225]).cuda().to(device).view(1, 1, 1, 3)
+        self.mean = torch.tensor([0.485, 0.456, 0.406]).cuda().to(device)
+        self.std = torch.tensor([0.229, 0.224, 0.225]).cuda().to(device)
         self.preload()
 
     def preload(self):
@@ -46,10 +46,10 @@ class data_prefetcher():
             keypoints_3d_gt[:, :, 0] = 0
 
             if random.random() <= 0.5 and self.is_train:
-                images_batch = torch.flip(images_batch, [2])
+                images_batch = torch.flip(images_batch, [-2])
 
-                keypoints_2d_batch_cpn[:, :, 0] *= -1
-                keypoints_2d_batch_cpn[:, joints_left + joints_right] = keypoints_2d_batch_cpn[:, joints_right + joints_left]
+                keypoints_2d_batch_cpn[..., 0] *= -1
+                keypoints_2d_batch_cpn[..., joints_left + joints_right, :] = keypoints_2d_batch_cpn[..., joints_right + joints_left, :]
 
                 keypoints_2d_batch_cpn_crop[:, :, 0] = 192 - keypoints_2d_batch_cpn_crop[:, :, 0] - 1
                 keypoints_2d_batch_cpn_crop[:, joints_left + joints_right] = keypoints_2d_batch_cpn_crop[:, joints_right + joints_left]
@@ -61,10 +61,9 @@ class data_prefetcher():
                 images_batch = torch.stack([images_batch, torch.flip(images_batch,[2])], dim=1)
 
                 keypoints_2d_batch_cpn_flip = keypoints_2d_batch_cpn.clone()
-                keypoints_2d_batch_cpn_flip[:, :, 0] *= -1
-                keypoints_2d_batch_cpn_flip[:, joints_left + joints_right] = keypoints_2d_batch_cpn_flip[:, joints_right + joints_left]
+                keypoints_2d_batch_cpn_flip[..., 0] *= -1
+                keypoints_2d_batch_cpn_flip[..., joints_left + joints_right, :] = keypoints_2d_batch_cpn_flip[..., joints_right + joints_left, :]
                 keypoints_2d_batch_cpn = torch.stack([keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_flip], dim=1)
-                # keypoints_2d_batch_cpn = torch.cat([keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_flip], dim=0)
 
                 keypoints_2d_batch_cpn_crop_flip = keypoints_2d_batch_cpn_crop.clone()
                 keypoints_2d_batch_cpn_crop_flip[:, :, 0] = 192 - keypoints_2d_batch_cpn_crop_flip[:, :, 0] - 1

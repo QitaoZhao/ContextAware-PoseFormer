@@ -54,6 +54,8 @@ def parse_args():
 	parser.add_argument("--logdir", type=str, default="logs/", help="Path, where logs will be stored")
 	parser.add_argument("--azureroot", type=str, default="", help="Root path, where codes are stored")
 
+	parser.add_argument("--frame", type=int, default=1, help="Frame number to be used.")
+
 	args = parser.parse_args()
 	# update config
 	update_config(args.config)
@@ -79,7 +81,8 @@ def setup_human36m_dataloaders(config, is_train, distributed_train, rank = None,
 			ignore_cameras=config.train.ignore_cameras,
 			crop=config.train.crop,
 			erase=config.train.erase,
-			data_format=config.dataset.data_format
+			data_format=config.dataset.data_format,
+			frame=args.frame
 		)
 
 		train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) if distributed_train else None
@@ -89,9 +92,6 @@ def setup_human36m_dataloaders(config, is_train, distributed_train, rank = None,
 			batch_size=config.train.batch_size,
 			shuffle=config.train.shuffle and (train_sampler is None), # debatable
 			sampler=train_sampler,
-			# collate_fn=dataset_utils.make_collate_fn(randomize_n_views=config.train.randomize_n_views,
-			#                                          min_n_views=config.train.min_n_views,
-			#                                          max_n_views=config.train.max_n_views),
 			num_workers=config.train.num_workers,
 			worker_init_fn=dataset_utils.worker_init_fn,
 			pin_memory=True
@@ -115,7 +115,8 @@ def setup_human36m_dataloaders(config, is_train, distributed_train, rank = None,
 		erase=config.val.erase,
 		rank=rank,
 		world_size=world_size,
-		data_format=config.dataset.data_format
+		data_format=config.dataset.data_format,
+		frame=args.frame
 	)
 
 	val_dataloader = DataLoader(

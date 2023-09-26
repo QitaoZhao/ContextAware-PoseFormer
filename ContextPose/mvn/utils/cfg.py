@@ -13,6 +13,7 @@ config.batch_output = False
 config.vis_freq = 1000
 config.vis_n_elements = 10
 config.id = 600
+config.frame = 1
 
 # model definition
 config.model = edict()

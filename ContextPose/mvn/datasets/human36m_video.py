@@ -223,6 +223,7 @@ class Human36MMultiViewDataset(Dataset):
         self.crop = crop
         self.erase = erase
         self.data_format = data_format
+        self.frame = frame
         self.actual_joints = {
             0: "rank",
             1: "rkne",
@@ -285,27 +286,53 @@ class Human36MMultiViewDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
+        pad = self.frame // 2
         shot = self.labels[idx]
-        
+
         # load image
         image_dir = self.root
         subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
         subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1)
         image_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}_{:06d}.jpg'
-        imagename = image_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1, shot['image_id'])
-        image_path = os.path.join(subdir, imagename)
 
-        image = cv2.imread(
-            os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
-            )#[..., ::-1]#.astype('float32')
+        frame_number = shot['nposes']
+        frame_idx = shot['image_id']
+        frame_min = idx - frame_idx + 1 # start here, 1
+        frame_max = frame_min + frame_number - 1
 
-        if self.crop:
-            # crop image
-            image = crop_image(image, shot['center'], shot['scale'], self.image_shape) # (256, 192, 3) uint8
+        start = max(frame_min, idx - pad)
+        end = min(idx + pad, frame_max)
 
-        # return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_gt'], shot['joints_2d_gt_crop']
-        # return np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
-        return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
+        shots = self.labels[start:end+1]
+
+        input_2d = np.array([element['joints_2d_cpn'] for element in shots])
+
+        images = np.zeros((input_2d.shape[0], 256, 192, 3))
+
+        for i in range(len(shots)):
+            element = shots[i]
+            imagename = image_format.format(element['subject'], element['action'], element['subaction'], element['camera_id']+1, element['image_id'])
+            image_path = os.path.join(subdir, imagename)
+
+            image = cv2.imread(
+                os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
+                )#[..., ::-1]#.astype('float32')
+
+            if self.crop:
+                # crop image
+                image = crop_image(image, element['center'], element['scale'], self.image_shape) # (256, 192, 3) uint8
+                images[i] = image
+
+        left_pad, right_pad = 0, 0
+        if input_2d.shape[0] != 2*pad + 1:
+            if idx - pad < start:
+                left_pad = start - (idx - pad)
+            if idx + pad > end:
+                right_pad = idx + pad - end
+            input_2d = np.pad(input_2d, ((left_pad, right_pad), (0, 0), (0, 0)), 'edge')
+            images = np.pad(images, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
+
+        return images, np.expand_dims(shot['joints_3d'], axis=0), input_2d, shot['joints_2d_cpn_crop']
 
     def evaluate_using_per_pose_error(self, per_pose_error, split_by_subject):
         def evaluate_by_actions(self, per_pose_error, mask=None):
@@ -506,8 +533,8 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
                  ignore_cameras=[],
                  crop=True,
                  erase=False,
-                 rank = None,
-                 world_size = None,
+                 rank=None,
+                 world_size=None,
                  data_format='',
                  frame=1
                  ):
@@ -558,37 +585,54 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
             return dist_size
 
     def __getitem__(self, idx):
+        pad = self.frame // 2
         shot = self.labels[idx]
 
         # load image
         image_dir = self.root
         subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
-        subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1)
         image_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}_{:06d}.jpg'
-        imagename = image_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1, shot['image_id'])
-        image_path = os.path.join(subdir, imagename)
 
-        image = cv2.imread(
-            os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
-            )#[..., ::-1]#.astype('float32')
+        subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id']+1)
 
-        if self.crop:
-            # crop image
-            image = crop_image(image, shot['center'], shot['scale'], self.image_shape) # (256, 192, 3) uint8
+        frame_number = shot['nposes']
+        frame_idx = shot['image_id']
+        frame_min = idx - frame_idx + 1 # start here, 1
+        frame_max = frame_min + frame_number - 1
 
-        # if self.norm_image:
-        #     image = normalize_image(image)
+        start = max(frame_min, idx - pad)
+        end = min(idx + pad, frame_max)
 
-        # keypoints_2d_cpn = shot['joints_2d_cpn']#.astype('float32')
-        # keypoints_2d_cpn_crop = shot['joints_2d_cpn_crop']#.astype('float32')
+        shots = self.labels[start:end+1]
+        input_2d = np.array([element['joints_2d_cpn'] for element in shots])
 
-        # keypoints_3d_gt = shot['joints_3d']#.astype('float32')
-        # keypoints_3d_gt[1:] -= keypoints_3d_gt[:1]
-        # keypoints_3d_gt[0] = 0
+        images = np.zeros((input_2d.shape[0], 256, 192, 3))
 
-        # return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_gt'], shot['joints_2d_gt_crop']
-        return image, np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
-        # return np.expand_dims(shot['joints_3d'], axis=0), shot['joints_2d_cpn'], shot['joints_2d_cpn_crop']
+        for i in range(len(shots)):
+            element = shots[i]
+            imagename = image_format.format(element['subject'], element['action'], element['subaction'], element['camera_id']+1, element['image_id'])
+            image_path = os.path.join(subdir, imagename)
+
+            image = cv2.imread(
+                os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
+                )#[..., ::-1]#.astype('float32')
+
+            if self.crop:
+                # crop image
+                image = crop_image(image, element['center'], element['scale'], self.image_shape) # (256, 192, 3) uint8
+                images[i] = image
+
+        left_pad, right_pad = 0, 0
+        if input_2d.shape[0] != 2*pad + 1:
+            if idx - pad < start:
+                left_pad = start - (idx - pad)
+            if idx + pad > end:
+                right_pad = idx + pad - end
+
+            input_2d = np.pad(input_2d, ((left_pad, right_pad), (0, 0), (0, 0)), 'edge')
+            images = np.pad(images, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
+
+        return images, np.expand_dims(shot['joints_3d'], axis=0), input_2d, shot['joints_2d_cpn_crop']
 
 
 
