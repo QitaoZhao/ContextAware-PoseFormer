@@ -17,7 +17,7 @@ This repo is the official implementation for **Context-aware PoseFormer: Single 
 ```
 code_root/ 
 ├── README.md
-├── ContextPose-PyTorch-release/
+├── ContextPose/
 └── H36M-Toolbox/
     ├── ...
     ├── generate_labels_h36m.py
@@ -47,7 +47,7 @@ It's time to train your model! Our framework supports multiple backbone 2D joint
 code_root/ 
 ├── README.md
 ├── H36M-Toolbox/
-└── ContextPose-PyTorch-release/
+└── ContextPose/
     ├── ...
     ├── train.py
     ├── experiments/
