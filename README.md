@@ -44,12 +44,10 @@ The code is developed and tested under the following environment.
 - CUDA 11.3
 
 ````
-```
 cd ContextPose
 conda create --name contextpose --file conda-requirements.txt
 conda activate contextpose
 pip install -r requirements.txt
-```
 ````
 
 ### Train

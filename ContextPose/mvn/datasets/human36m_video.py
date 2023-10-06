@@ -554,7 +554,8 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
             ignore_cameras=ignore_cameras,
             crop=crop,
             erase=erase,
-            data_format=data_format
+            data_format=data_format,
+            frame=frame
         )
 
         self.pred_results_path = pred_results_path
