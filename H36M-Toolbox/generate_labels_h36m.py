@@ -73,8 +73,6 @@ if __name__ == '__main__':
         for a in action_list:
             for sa in subaction_list:
                 for c in camera_list:
-                    if c != 1:
-                        continue
 
                     camera = camera_data[(s, c)]
                     camera_dict = {}
