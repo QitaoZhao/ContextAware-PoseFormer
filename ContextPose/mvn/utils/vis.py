@@ -2,7 +2,6 @@ import numpy as np
 import scipy.ndimage
 import skimage.transform
 import cv2
-import h5py
 import os
 import torch
 

@@ -1,0 +1,33 @@
+certifi==2022.9.24
+charset-normalizer==3.1.0
+cycler==0.11.0
+easydict==1.10
+einops==0.6.1
+fonttools==4.39.4
+idna==3.4
+imageio==2.31.1
+kiwisolver==1.4.4
+lazy_loader==0.2
+matplotlib==3.5.2
+networkx==2.8.8
+numpy==1.24.4
+opencv-python==4.6.0.66
+packaging==23.1
+Pillow==10.0.0
+protobuf==3.20.3
+pyparsing==3.0.9
+python-dateutil==2.8.2
+PyWavelets==1.3.0
+PyYAML==6.0
+requests==2.31.0
+scikit-image==0.20.0
+scipy==1.9.1
+six==1.16.0
+tensorboardX==2.6
+tifffile==2023.7.10
+timm==0.6.7
+torch @ http://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp38-cp38-linux_x86_64.whl#sha256=b6a799bdb6ee3d914e5e62bddb4276d4a10248c1af4f2d217738e5f9ee27485b
+torchvision @ http://download.pytorch.org/whl/cu113/torchvision-0.12.0%2Bcu113-cp38-cp38-linux_x86_64.whl#sha256=37133e8c5b0ec2f01999e59116f6d0e36d9afb1c7f8f58bd0c3dc8996f835419
+tqdm==4.66.1
+typing_extensions==4.6.2
+urllib3==2.0.2

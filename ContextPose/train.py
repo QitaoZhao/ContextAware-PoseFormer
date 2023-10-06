@@ -9,12 +9,10 @@ from itertools import islice
 import pickle
 import copy
 from tqdm import tqdm
-import h5py
 from PIL import Image
 import numpy as np
 np.set_printoptions(suppress=True)
 import cv2
-import prettytable
 
 import torch
 from torch import nn

@@ -35,6 +35,23 @@ code_root/
         └── s_11_act_16_subact_02_ca_04/
 ```
 
+### Environment
+
+The code is developed and tested under the following environment.
+
+- Python 3.8.10
+- PyTorch 1.11.0
+- CUDA 11.3
+
+````
+```
+cd ContextPose
+conda create --name contextpose --file conda-requirements.txt
+conda activate contextpose
+pip install -r requirements.txt
+```
+````
+
 ### Train
 
 It's time to train your model! Our framework supports multiple backbone 2D joint detectors. For now, we take [HRNet](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch) as an example.

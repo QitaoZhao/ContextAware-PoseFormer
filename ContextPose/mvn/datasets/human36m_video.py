@@ -3,7 +3,6 @@ import collections
 from collections import defaultdict
 from time import time
 import pickle
-import h5py
 import random
 
 import numpy as np
@@ -555,8 +554,7 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
             ignore_cameras=ignore_cameras,
             crop=crop,
             erase=erase,
-            data_format=data_format,
-            frame=frame
+            data_format=data_format
         )
 
         self.pred_results_path = pred_results_path

@@ -3,7 +3,6 @@ import collections
 from collections import defaultdict
 from time import time
 import pickle
-import h5py
 import random
 
 import numpy as np
