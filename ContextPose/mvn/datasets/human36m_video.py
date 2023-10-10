@@ -3,6 +3,7 @@ import collections
 from collections import defaultdict
 from time import time
 import pickle
+import h5py
 import random
 
 import numpy as np
@@ -555,7 +556,7 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
             crop=crop,
             erase=erase,
             data_format=data_format,
-            frame=frame
+            frame = frame
         )
 
         self.pred_results_path = pred_results_path
@@ -588,6 +589,7 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
         pad = self.frame // 2
         shot = self.labels[idx]
 
+
         # load image
         image_dir = self.root
         subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
@@ -603,11 +605,26 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
         start = max(frame_min, idx - pad)
         end = min(idx + pad, frame_max)
 
+        # flag = False
+        # if idx < pad:
+        #     flag = True
+        #     # print("idx", idx)
+        #     # print("pad", pad)
+        #     # print("start_old", start)
+        #     # print("end_old", end)
+        #
+        #     start = 0
+        #     end = idx + pad
+        #     # print("start_new", start)
+        #     # print("end_new", end)
+
         shots = self.labels[start:end+1]
+
         input_2d = np.array([element['joints_2d_cpn'] for element in shots])
-
+        # if flag:
+        #     print("input_2d", input_2d.shape)
+        ##### change here
         images = np.zeros((input_2d.shape[0], 256, 192, 3))
-
         for i in range(len(shots)):
             element = shots[i]
             imagename = image_format.format(element['subject'], element['action'], element['subaction'], element['camera_id']+1, element['image_id'])
@@ -623,16 +640,115 @@ class Human36MSingleViewDataset(Human36MMultiViewDataset):
                 images[i] = image
 
         left_pad, right_pad = 0, 0
-        if input_2d.shape[0] != 2*pad + 1:
+
+        ##### temporary solution to solve the issue of (0,) for input_2d when use multiple GPU
+        # flag1 = False
+        # if input_2d.shape[0] == 0:
+        #     flag1 = True
+        #     print("input_2d_brfore_pad, ", input_2d.shape)
+        #     # print("shots", shots)
+        #     print("idx", idx)
+        #     print("start_old", start)
+        #     print("end_old", end)
+
+        # if flag:
+        #     print("input_2d, ", input_2d.shape)
+
+        # if idx == 0 or idx==1:
+        #     print("input_2d, ", input_2d.shape)
+        #     # print("shots", shots)
+        #     print("start", start)
+        #     print("end+1", end+1)
+        #     print("idx get 0 or 1", idx)
+
+        if (input_2d.shape[0] != 2*pad) + 1 and (input_2d.shape[0] != 0):
             if idx - pad < start:
                 left_pad = start - (idx - pad)
             if idx + pad > end:
                 right_pad = idx + pad - end
-
             input_2d = np.pad(input_2d, ((left_pad, right_pad), (0, 0), (0, 0)), 'edge')
             images = np.pad(images, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
 
-        return images, np.expand_dims(shot['joints_3d'], axis=0), input_2d, shot['joints_2d_cpn_crop']
+        cpn_crop = shot['joints_2d_cpn_crop']
+
+
+        if input_2d.shape[0] != self.frame or images.shape[0] != self.frame:
+            # n_pad = input_2d.shape[0]
+            # print("n_pad", n_pad)
+            # print("self.frame", self.frame)
+            # print("fc-------------input_2d, ", input_2d.shape)
+            # print("fc-------------images", images.shape)
+            # print("fc-------------idx", idx)
+            # # input_2d = np.randn((self.frame, 17, 2)) * 0.01
+            # # images = np.ones((self.frame, 256, 192, 3))  * 0.01
+            # print("af--------input_2d, ", input_2d.shape)
+            # print("af--------images", images.shape)
+
+        ##### one gpu find idx info
+        # if idx == 135833 or idx == 135835 or idx == 2 or idx == 1:
+        #     print("1gpu----idx", idx)
+        #     print("start", start)
+        #     print("end", end)
+        #     print("left_pad", left_pad)
+        #     print("right_pad", right_pad)
+
+            shot = self.labels[100]
+
+            # load image
+            image_dir = self.root
+            subdir_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}'
+            image_format = 's_{:02d}_act_{:02d}_subact_{:02d}_ca_{:02d}_{:06d}.jpg'
+
+            subdir = subdir_format.format(shot['subject'], shot['action'], shot['subaction'], shot['camera_id'] + 1)
+
+            frame_number = shot['nposes']
+            frame_idx = shot['image_id']
+            frame_min = idx - frame_idx + 1  # start here, 1
+            frame_max = frame_min + frame_number - 1
+
+            start = max(frame_min, idx - pad)
+            end = min(idx + pad, frame_max)
+
+            shots = self.labels[100:100 + self.frame]
+
+            input_2d = np.array([element['joints_2d_cpn'] for element in shots])
+            # if flag:
+            #     print("input_2d", input_2d.shape)
+            ##### change here
+            images = np.zeros((input_2d.shape[0], 256, 192, 3))
+            for i in range(len(shots)):
+                element = shots[i]
+                imagename = image_format.format(element['subject'], element['action'], element['subaction'],
+                                                element['camera_id'] + 1, element['image_id'])
+                image_path = os.path.join(subdir, imagename)
+
+                image = cv2.imread(
+                    os.path.join(image_dir, image_path), cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
+                )  # [..., ::-1]#.astype('float32')
+
+                if self.crop:
+                    # crop image
+                    image = crop_image(image, element['center'], element['scale'],
+                                       self.image_shape)  # (256, 192, 3) uint8
+                    images[i] = image
+
+            left_pad, right_pad = 0, 0
+
+
+            if (input_2d.shape[0] != 2 * pad) + 1 and (input_2d.shape[0] != 0):
+                if idx - pad < start:
+                    left_pad = start - (idx - pad)
+                if idx + pad > end:
+                    right_pad = idx + pad - end
+                input_2d = np.pad(input_2d, ((left_pad, right_pad), (0, 0), (0, 0)), 'edge')
+                images = np.pad(images, ((left_pad, right_pad), (0, 0), (0, 0), (0, 0)), 'edge')
+
+            cpn_crop = shot['joints_2d_cpn_crop']
+
+
+
+
+        return images, np.expand_dims(shot['joints_3d'], axis=0), input_2d, cpn_crop
 
 
 
