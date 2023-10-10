@@ -41,14 +41,25 @@ class P_MPJPE(nn.Module):
 
 		normX = np.sqrt(np.sum(X0**2, axis=(1, 2), keepdims=True))
 		normY = np.sqrt(np.sum(Y0**2, axis=(1, 2), keepdims=True))
-		
+		np.seterr(divide='ignore', invalid='ignore')
 		X0 /= normX
 		Y0 /= normY
 
 		H = np.matmul(X0.transpose(0, 2, 1), Y0)
-		U, s, Vt = np.linalg.svd(H)
+		try:
+			U, s, Vt = np.linalg.svd(H)
+		except np.linalg.LinAlgError:
+			return 100
 		V = Vt.transpose(0, 2, 1)
 		R = np.matmul(V, U.transpose(0, 2, 1))
+		
+		# X0 /= normX
+		# Y0 /= normY
+
+		# H = np.matmul(X0.transpose(0, 2, 1), Y0)
+		# U, s, Vt = np.linalg.svd(H)
+		# V = Vt.transpose(0, 2, 1)
+		# R = np.matmul(V, U.transpose(0, 2, 1))
 
 		# Avoid improper rotations (reflections), i.e. rotations with det(R) = -1
 		sign_detR = np.sign(np.expand_dims(np.linalg.det(R), axis=1))
