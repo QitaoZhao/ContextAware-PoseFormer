@@ -82,7 +82,7 @@ train:
   n_objects_per_epoch: 15000
   n_epochs: 9999
 
-  batch_size: 512  # 512 for other backbones, 256 for cpn
+  batch_size: 64  # 512 for other backbones, 256 for cpn
 
   optimizer: 'Adam'
   backbone_lr: 0.0001
@@ -103,15 +103,15 @@ train:
   randomize_n_views: true
   min_n_views: 1
   max_n_views: 1
-  num_workers: 14
+  num_workers: 8
 
   limb_length_path: "data/human36m/extra/mean_and_std_limb_length.h5"
   pred_results_path: "data/pretrained/human36m/human36m_alg_10-04-2019/checkpoints/0060/results/train.pkl"
 
 val:
-  batch_size: 512  # 512 for fixed backbone, 256 for cpn
+  batch_size: 64  # 512 for fixed backbone, 256 for cpn
 
-  flip_test: true
+  flip_test: false
   with_damaged_actions: true
   undistort_images: true
 
@@ -121,7 +121,7 @@ val:
   randomize_n_views: true
   min_n_views: 1
   max_n_views: 1
-  num_workers: 14
+  num_workers: 8
   retain_every_n_frames_in_test: 1
 
   limb_length_path: "data/human36m/extra/mean_and_std_limb_length.h5"
