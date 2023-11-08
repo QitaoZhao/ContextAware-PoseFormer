@@ -14,6 +14,8 @@ This repo is the official implementation for **A Single 2D Pose with Context is 
 
 ![framework](./images/framework.png)
 
+**Framework.** A comparison between previous methods (a) and our method (b) at a framework level. Previous methods discard the learned representations produced by 2D pose detectors and heavily rely on long-term temporal information. We retrieve such visual representations and engage them in the lifting process. We selectively extract joint-context features from feature maps, enabling our single-frame model to outperform video-based models with extremely large frame numbers. Note that we do not fine-tune the feature maps on the 3D task.
+
 ### Dataset Preparation
 
 1. Please refer to [H36M-Toolbox](https://github.com/CHUNYUWANG/H36M-Toolbox) to set up RGB images from the Human3.6M dataset. We include this repo in our project for your convenience. All RGB images should be put under `code_root/H36M-Toolbox/images/`. 
