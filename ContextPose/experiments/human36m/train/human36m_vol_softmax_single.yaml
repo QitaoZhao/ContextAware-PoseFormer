@@ -56,7 +56,6 @@ model:
     depth: 4
 
 loss:
-  # criterion: "MAE"
   criterion: "MPJPE"
   scale_keypoints_3d: 0.1
 
@@ -74,7 +73,6 @@ dataset:
   extra_root: "data/human36m/extra"
   train_labels_path: "data/h36m_train.pkl"
   val_labels_path: "data/h36m_validation.pkl"
-  # train_labels_path: "data/human36m/extra/human36m-multiview-labels-GTbboxes.npy"
   
 train:
   n_objects_per_epoch: 15000
