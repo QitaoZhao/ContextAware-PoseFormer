@@ -70,16 +70,9 @@ class data_prefetcher():
                 keypoints_2d_batch_cpn_crop_flip[:, joints_left + joints_right] = keypoints_2d_batch_cpn_crop_flip[:, joints_right + joints_left]
                 keypoints_2d_batch_cpn_crop = torch.stack([keypoints_2d_batch_cpn_crop, keypoints_2d_batch_cpn_crop_flip], dim=1)
 
-                # keypoints_2d_batch_gt_crop_flip = keypoints_2d_batch_gt_crop.clone()
-                # keypoints_2d_batch_gt_crop_flip[:, :, 0] = 192 - keypoints_2d_batch_gt_crop_flip[:, :, 0] - 1
-                # keypoints_2d_batch_gt_crop_flip[:, joints_left + joints_right] = keypoints_2d_batch_gt_crop_flip[:, joints_right + joints_left]
-                # keypoints_2d_batch_gt_crop = torch.stack([keypoints_2d_batch_gt_crop, keypoints_2d_batch_gt_crop_flip], dim=1)
-                # keypoints_2d_batch_cpn_crop = torch.cat([keypoints_2d_batch_cpn_crop, keypoints_2d_batch_cpn_crop_flip], dim=0)
                 del keypoints_2d_batch_cpn_flip, keypoints_2d_batch_cpn_crop_flip
 
-            # self.next_batch = [keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), keypoints_2d_batch_cpn_crop.float()]
             self.next_batch = [images_batch.float(), keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), keypoints_2d_batch_cpn_crop.float()]
-            # self.next_batch = [images_batch_copy, images_batch.float(), keypoints_3d_gt.float(), keypoints_2d_batch_cpn.float(), keypoints_2d_batch_cpn_crop.float(), keypoints_2d_batch_gt_crop.float()]
 
 
     def next(self):
@@ -148,18 +141,8 @@ def prepare_batch(batch, device, config):
     # 2D keypoints
     keypoints_2d_batch_cpn = torch.from_numpy(np.stack(batch['keypoints_2d_cpn'], axis=0)[:, :, :2]).float().to(device)      # (b, n_joints, 3)
     keypoints_2d_batch_cpn_crop = torch.from_numpy(np.stack(batch['keypoints_2d_cpn_crop'], axis=0)[:, :, :2]).float().to(device)      # (b, n_joints, 3)
-    # # 3D keypoints
-    # keypoints_3d_batch_gt = torch.from_numpy(np.stack(batch['keypoints_3d'], axis=0)[:, :, :3]).float().to(device)      # (b, n_joints, 3)
-
-    # # keypoints validity
-    # keypoints_validity_batch_gt = torch.from_numpy(np.stack(batch['keypoints_3d'], axis=0)[:, :, 3:]).float().to(device)     # (b, n_joints, 1)
-
-    # # projection matricies
-    # proj_matricies_batch = torch.stack([torch.stack([torch.from_numpy(camera.projection) for camera in camera_batch], dim=0) for camera_batch in batch['cameras']], dim=0).transpose(1, 0)  # shape (batch_size, n_views, 3, 4)
-    # proj_matricies_batch = proj_matricies_batch.float().to(device)
 
     return images_batch, keypoints_3d_batch_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop
-    # return images_batch, keypoints_3d_batch_gt, keypoints_validity_batch_gt, proj_matricies_batch
 
 _im_zfile = []
 

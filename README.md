@@ -8,6 +8,12 @@ This repo is the official implementation for **A Single 2D Pose with Context is 
 
 [2023.11.06] Our paper on [arXiv](https://arxiv.org/pdf/2311.03312.pdf) has been released. We are preparing for the video narration; some parts of the code still need cleaning. 
 
+## Introduction
+
+**Abstract.** The dominant paradigm in 3D human pose estimation that lifts a 2D pose sequence to 3D heavily relies on long-term temporal clues (i.e., using a daunting number of video frames) for improved accuracy, which incurs performance saturation, intractable computation and the non-causal problem. This can be attributed to their inherent inability to perceive spatial context as plain 2D joint coordinates carry no visual cues. To address this issue, we propose a straightforward yet powerful solution: leveraging the *readily available* intermediate visual representations produced by off-the-shelf (pre-trained) 2D pose detectors -- no finetuning on the 3D task is even needed. The key observation is that, while the pose detector learns to localize 2D joints, such representations (e.g., feature maps) implicitly encode the joint-centric spatial context thanks to the regional operations in backbone networks. We design a simple baseline named **Context-Aware PoseFormer** to showcase its effectiveness. *Without access to any temporal information*, the proposed method significantly outperforms its context-agnostic counterpart, PoseFormer, and other state-of-the-art methods using up to *hundreds of* video frames regarding both speed and precision. 
+
+![framework](./images/framework.png)
+
 ### Dataset Preparation
 
 1. Please refer to [H36M-Toolbox](https://github.com/CHUNYUWANG/H36M-Toolbox) to set up RGB images from the Human3.6M dataset. We include this repo in our project for your convenience. All RGB images should be put under `code_root/H36M-Toolbox/images/`. 
@@ -94,18 +100,6 @@ If you want to train on multiple (e.g., 4) GPUS, simply do the following:
 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_single.yaml --logdir ./logs
 ```
 
-Here is an example log where I trained this model using 4 Nvidia 3090 GPUs. `3d_test_p1` is the MPJPE error which we report as the major metric.
-
-![log](./images/log.png)
-
-If you want to train on multiple frames, run the following:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_video.yaml --frame 81 --logdir ./logs
-```
-
-Note: The config and dataset files are different from those for the single frame case. The number of video frames is set by `--frame 81`. **This feature is not carefully tested.**
-
 ### Test
 
 The checkpoint corresponding to the log above is available [here](https://drive.google.com/file/d/1nh8BLCyEFaoRGhb_sFmwvU5xWJLlATi4/view?usp=sharin). You should get 41.3mm MPJPE using this checkpoint. Place the trained model (`best_epoch.bin`) under `code_root/ContextPose/checkpoint/`, and run:
@@ -113,10 +107,6 @@ The checkpoint corresponding to the log above is available [here](https://drive.
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_single.yaml --logdir ./logs --eval
 ```
-
-A screenshot of the test output is as follows:
-
-![out](./images/test_out.png)
 
 ## Cite Our Work
 
