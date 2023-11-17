@@ -1,13 +1,9 @@
 import _init_path
-from mvn import datasets
 from mvn.utils.cfg import config, update_config
 import numpy as np
 
-from easydict import EasyDict as edict
-import yaml
 import os
 import sys
-import time
 from tqdm import tqdm
 import h5py
 

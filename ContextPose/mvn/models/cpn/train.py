@@ -11,10 +11,9 @@ import torchvision.datasets as datasets
 
 from config import cfg
 from utils.logger import Logger
-from utils.evaluation import accuracy, AverageMeter, final_preds
+from utils.evaluation import AverageMeter
 from utils.misc import save_model, adjust_learning_rate
 from utils.osutils import mkdir_p, isfile, isdir, join
-from utils.transforms import fliplr, flip_back
 from networks import network 
 from dataloader.mscocoMulti import MscocoMulti
 

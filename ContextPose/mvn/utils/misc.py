@@ -1,9 +1,5 @@
-import os
 import yaml
 import json
-import re
-
-import torch
 
 
 def config_to_str(config):

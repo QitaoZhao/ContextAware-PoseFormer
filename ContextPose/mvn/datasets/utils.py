@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-from mvn.utils.multiview import project_3d_points_to_image_plane_without_distortion
 from mvn.utils.img import image_batch_to_torch
 
 import os
