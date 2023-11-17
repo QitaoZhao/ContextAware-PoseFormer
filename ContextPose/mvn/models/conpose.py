@@ -1,20 +1,7 @@
-from copy import deepcopy
-import numpy as np
-import pickle
-import random
-from time import time
-
-from scipy.optimize import least_squares
-
 import torch
 from torch import nn
-import torch.nn.functional as F
 
-from mvn.utils import op, multiview, img, misc, volumetric
-
-from mvn.models import pose_hrnet, pose_resnet
-from mvn.models.networks import network
-from mvn.models.cpn.test_config import cfg
+from mvn.models import pose_hrnet
 from mvn.models.pose_dformer import PoseTransformer
 
 

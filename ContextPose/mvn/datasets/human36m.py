@@ -1,21 +1,16 @@
 import os
 import collections
 from collections import defaultdict
-from time import time
 import pickle
-import random
 
 import numpy as np
 np.set_printoptions(suppress=True)
 import cv2
 
-import torch
 from torch.utils.data import Dataset
 
 from mvn.models.loss import MPJPE, P_MPJPE, N_MPJPE, MPJVE
-from mvn.utils.multiview import Camera, project_3d_points_to_image_plane_without_distortion
-from mvn.utils.img import get_square_bbox, resize_image, crop_image, normalize_image, scale_bbox, erase_image
-from mvn.utils import volumetric
+from mvn.utils.img import crop_image
 
 retval = {
     'subject_names': ['S1', 'S5', 'S6', 'S7', 'S8', 'S9', 'S11'],

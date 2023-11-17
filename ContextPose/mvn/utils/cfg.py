@@ -1,6 +1,5 @@
 import yaml
 from easydict import EasyDict as edict
-import numpy as np
 import os
 
 config = edict()

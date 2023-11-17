@@ -1,20 +1,15 @@
 ## Our PoseFormer model was revised from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 
 import math
-import logging
 from functools import partial
-from collections import OrderedDict
-from einops import rearrange, repeat
+from einops import rearrange
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.init import constant_
 
-import numpy as np
-
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-from timm.models.registry import register_model
+from timm.models.layers import DropPath
 
 
 class Mlp(nn.Module):

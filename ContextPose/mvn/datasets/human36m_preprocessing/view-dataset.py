@@ -5,8 +5,6 @@
 
     Usage: `python3 view-dataset.py <path/to/Human3.6M-root> <path/to/human36m-multiview-labels-*bboxes.npy> [<start-sample-number> [<samples-per-step>]]
 """
-import torch
-import numpy as np
 import cv2
 
 import os, sys
@@ -53,6 +51,7 @@ while True:
 
     display = image.copy()
 
+    # Invalid Import! Non-existant function is being used.
     from mvn.utils.multiview import project_3d_points_to_image_plane_without_distortion as project
     keypoints_2d = project(camera.projection, sample['keypoints_3d'][:, :3])
     

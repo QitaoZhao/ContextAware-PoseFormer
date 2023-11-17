@@ -2,21 +2,12 @@ import os
 import shutil
 import argparse
 import time
-import json
 from datetime import datetime
 from collections import defaultdict
-from itertools import islice
-import pickle
-import copy
-from tqdm import tqdm
-from PIL import Image
 import numpy as np
 np.set_printoptions(suppress=True)
-import cv2
 
 import torch
-from torch import nn
-from torch import autograd
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -25,14 +16,11 @@ from torch.nn.parallel import DistributedDataParallel
 from tensorboardX import SummaryWriter
 
 from mvn.models.conpose import VolumetricTriangulationNet
-from mvn.models.loss import MPJPE, KeypointsMSELoss, KeypointsMSESmoothLoss, KeypointsMAELoss, KeypointsL2Loss, VolumetricCELoss, LimbLengthError
+from mvn.models.loss import MPJPE, KeypointsMSELoss, KeypointsMSESmoothLoss, KeypointsMAELoss
 
-from mvn.utils import img, multiview, op, vis, misc, cfg
-from mvn.utils.logger import Logger
+from mvn.utils import misc
 from mvn.utils.cfg import config, update_config, update_dir
-from mvn import datasets
 from mvn.datasets import utils as dataset_utils
-from mvn.utils.vis import JOINT_NAMES_DICT
 
 
 joints_left = [4, 5, 6, 11, 12, 13] 

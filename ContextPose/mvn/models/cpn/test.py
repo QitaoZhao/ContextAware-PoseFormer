@@ -1,14 +1,9 @@
 import os
-import sys
 import argparse
-import time
-import matplotlib.pyplot as plt
 
 import torch
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.optim
-import torchvision.datasets as datasets
 import cv2
 import json
 import numpy as np
@@ -16,11 +11,7 @@ import numpy as np
 from test_config import cfg
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
-from utils.logger import Logger
-from utils.evaluation import accuracy, AverageMeter, final_preds
-from utils.misc import save_model, adjust_learning_rate
-from utils.osutils import mkdir_p, isfile, isdir, join
-from utils.transforms import fliplr, flip_back
+from utils.osutils import mkdir_p, isdir
 from utils.imutils import im_to_numpy, im_to_torch
 from networks import network 
 from dataloader.mscocoMulti import MscocoMulti

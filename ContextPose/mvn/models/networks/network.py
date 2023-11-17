@@ -1,6 +1,5 @@
 from .resnet import *
 import torch.nn as nn
-import torch
 from .globalNet import globalNet
 from .refineNet import refineNet
 
