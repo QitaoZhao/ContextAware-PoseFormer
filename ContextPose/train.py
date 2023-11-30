@@ -15,6 +15,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from tensorboardX import SummaryWriter
 
+from mvn import datasets
 from mvn.models.conpose import VolumetricTriangulationNet
 from mvn.models.loss import MPJPE, KeypointsMSELoss, KeypointsMSESmoothLoss, KeypointsMAELoss
 
