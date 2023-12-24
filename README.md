@@ -2,11 +2,18 @@
 
 This repo is the official implementation for **A Single 2D Pose with Context is Worth Hundreds for 3D Human Pose Estimation**. The paper has been accepted to [NeurIPS 2023](https://nips.cc/).
 
-[arXiv](https://arxiv.org/pdf/2311.03312.pdf) / [project page](https://qitaozhao.github.io/ContextAware-PoseFormer)
+[arXiv](https://arxiv.org/pdf/2311.03312.pdf) / [project page](https://qitaozhao.github.io/ContextAware-PoseFormer) / [video](https://recorder-v3.slideslive.com/#/share?share=87185&s=6df19fee-f7ae-4be9-af4e-3a89fd626400)
 
 ### News
 
+[2023.12.23] The pre-processed labels are available [here](https://drive.google.com/drive/folders/1OYKWnu_5GPLRfceD3Psf4-JZkloBodKx). We also add the [video narration](https://recorder-v3.slideslive.com/#/share?share=87185&s=6df19fee-f7ae-4be9-af4e-3a89fd626400) for our paper.
+
 [2023.11.06] Our paper on [arXiv](https://arxiv.org/pdf/2311.03312.pdf) has been released. We are preparing for the video narration; some parts of the code still need cleaning. 
+
+## Related Previous Work
+
++ PoseFormer: https://arxiv.org/abs/2103.10455
++ PoseFormerV2: https://arxiv.org/abs/2303.17472
 
 ## Introduction
 
@@ -26,7 +33,9 @@ This repo is the official implementation for **A Single 2D Pose with Context is 
 
 3. We modify `generate_labels_h36m.py` from `generate_labels.py` provided by [H36M-Toolbox](https://github.com/CHUNYUWANG/H36M-Toolbox). Run `generate_labels_h36m.py` to generate labels (`h36m_train.pkl` and `h36m_validation.pkl`) for training and testing. It may take a while.
 
-4. Your directory should look like this if you correctly follow the previous steps.
+4. **Pre-processed data**: please check [here](https://drive.google.com/drive/folders/1OYKWnu_5GPLRfceD3Psf4-JZkloBodKx) for the pre-processed labels if you don't want to generate them yourself, but note that you still need to download the images from the dataset following the first step.
+
+5. Your directory should look like this if you correctly follow the previous steps.
 
 ```
 code_root/ 
