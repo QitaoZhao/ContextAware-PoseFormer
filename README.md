@@ -6,7 +6,7 @@ This repo is the official implementation for **A Single 2D Pose with Context is 
 
 ### News
 
-[2023.12.23] The pre-processed labels are available [here](https://drive.google.com/drive/folders/1OYKWnu_5GPLRfceD3Psf4-JZkloBodKx). We also add the [video narration](https://recorder-v3.slideslive.com/#/share?share=87185&s=6df19fee-f7ae-4be9-af4e-3a89fd626400) for our paper.
+[2023.12.23] The pre-processed labels for Human3.6M are available [here](https://drive.google.com/drive/folders/1OYKWnu_5GPLRfceD3Psf4-JZkloBodKx). We also add the [video narration](https://recorder-v3.slideslive.com/#/share?share=87185&s=6df19fee-f7ae-4be9-af4e-3a89fd626400) for our paper.
 
 [2023.11.06] Our paper on [arXiv](https://arxiv.org/pdf/2311.03312.pdf) has been released. We are preparing for the video narration; some parts of the code still need cleaning. 
 
@@ -22,6 +22,23 @@ This repo is the official implementation for **A Single 2D Pose with Context is 
 ![framework](./images/framework.png)
 
 **Framework.** A comparison between previous methods (a) and our method (b) at a framework level. Previous methods discard the learned representations produced by 2D pose detectors and heavily rely on long-term temporal information. We retrieve such visual representations and engage them in the lifting process. We selectively extract joint-context features from feature maps, enabling our single-frame model to outperform video-based models with extremely large frame numbers. Note that we do not fine-tune the feature maps on the 3D task.
+
+## Environment
+
+The code is developed and tested under the following environment.
+
+- Python 3.8.10
+- PyTorch 1.11.0
+- CUDA 11.3
+
+````
+cd ContextPose
+conda create --name conposeformer --file conda-requirements.txt
+conda activate conposeformer
+pip install -r requirements.txt
+````
+
+## Human3.6M
 
 ### Dataset Preparation
 
@@ -57,21 +74,6 @@ code_root/
         ├── ...
         └── s_11_act_16_subact_02_ca_04/
 ```
-
-### Environment
-
-The code is developed and tested under the following environment.
-
-- Python 3.8.10
-- PyTorch 1.11.0
-- CUDA 11.3
-
-````
-cd ContextPose
-conda create --name conposeformer --file conda-requirements.txt
-conda activate conposeformer
-pip install -r requirements.txt
-````
 
 ### Train
 
@@ -113,11 +115,15 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node
 
 ### Test
 
-The checkpoint corresponding to the log above is available [here](https://drive.google.com/file/d/1nh8BLCyEFaoRGhb_sFmwvU5xWJLlATi4/view?usp=sharin). You should get 41.3mm MPJPE using this checkpoint. Place the trained model (`best_epoch.bin`) under `code_root/ContextPose/checkpoint/`, and run:
+The checkpoint is available [here](https://drive.google.com/file/d/1sVJrSUszrhohipekPDa_rTeGa4EpEH7h/view?usp=drive_link). You should get 41.3mm MPJPE using this checkpoint. Place the trained model (`best_epoch.bin`) under `code_root/ContextPose/checkpoint/`, and run:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_single.yaml --logdir ./logs --eval
 ```
+
+## MPI-INF-3DHP
+
+We followed [P-STMO](https://github.com/paTRICK-swk/P-STMO?tab=readme-ov-file#mpi-inf-3dhp-1) to prepare the data and train our model. Please click [here](https://github.com/QitaoZhao/ContextAware-PoseFormer/tree/main/ContextPose_mpi) for details.
 
 ## Cite Our Work
 
@@ -135,5 +141,5 @@ If you find our work useful in your research, please consider citing:
 
 ## Acknowledgment
 
-Our codes are largely based on [ContextPose](https://github.com/ShirleyMaxx/ContextPose-PyTorch-release) and [PoseFormer](https://github.com/zczcwh/PoseFormer). We follow [H36M-Toolbox](https://github.com/CHUNYUWANG/H36M-Toolbox) for data preparation. Many thanks to the authors!
+Our codes are primarily based on [ContextPose](https://github.com/ShirleyMaxx/ContextPose-PyTorch-release) and [PoseFormer](https://github.com/zczcwh/PoseFormer). We followed [H36M-Toolbox](https://github.com/CHUNYUWANG/H36M-Toolbox) to prepare the Human3.6M dataset and [P-STMO](https://github.com/paTRICK-swk/P-STMO?tab=readme-ov-file#mpi-inf-3dhp-1) for MPI-INF-3DHP. Many thanks to the authors!
 

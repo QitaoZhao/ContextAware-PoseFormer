@@ -1,0 +1,1 @@
+Put the pre-trained weights of HRNet in this folder.
