@@ -25,41 +25,30 @@ class MPJPE(nn.Module):
 class P_MPJPE(nn.Module):
 	def __init__(self):
 		super().__init__()
-		
+
 	def forward(self, keypoints_pred, keypoints_gt):
 		"""
 		Pose error: MPJPE after rigid alignment (scale, rotation, and translation),
 		often referred to as "Protocol #2" in many papers.
 		"""
 		assert keypoints_pred.shape == keypoints_gt.shape
-		
+
 		muX = np.mean(keypoints_gt, axis=1, keepdims=True)
 		muY = np.mean(keypoints_pred, axis=1, keepdims=True)
-		
+
 		X0 = keypoints_gt - muX
 		Y0 = keypoints_pred - muY
 
 		normX = np.sqrt(np.sum(X0**2, axis=(1, 2), keepdims=True))
 		normY = np.sqrt(np.sum(Y0**2, axis=(1, 2), keepdims=True))
-		np.seterr(divide='ignore', invalid='ignore')
+
 		X0 /= normX
 		Y0 /= normY
 
 		H = np.matmul(X0.transpose(0, 2, 1), Y0)
-		try:
-			U, s, Vt = np.linalg.svd(H)
-		except np.linalg.LinAlgError:
-			return 100
+		U, s, Vt = np.linalg.svd(H)
 		V = Vt.transpose(0, 2, 1)
 		R = np.matmul(V, U.transpose(0, 2, 1))
-		
-		# X0 /= normX
-		# Y0 /= normY
-
-		# H = np.matmul(X0.transpose(0, 2, 1), Y0)
-		# U, s, Vt = np.linalg.svd(H)
-		# V = Vt.transpose(0, 2, 1)
-		# R = np.matmul(V, U.transpose(0, 2, 1))
 
 		# Avoid improper rotations (reflections), i.e. rotations with det(R) = -1
 		sign_detR = np.sign(np.expand_dims(np.linalg.det(R), axis=1))
@@ -71,13 +60,13 @@ class P_MPJPE(nn.Module):
 
 		a = tr * normX / normY # Scale
 		t = muX - a*np.matmul(muY, R) # Translation
-		
+
 		# Perform rigid transformation on the input
 		keypoints_pred_aligned = a*np.matmul(keypoints_pred, R) + t
-		
+
 		# Return MPJPE
 		return np.mean(np.linalg.norm(keypoints_pred_aligned - keypoints_gt, axis=len(keypoints_gt.shape)-1))
-	
+
 
 class N_MPJPE(nn.Module):
 	def __init__(self):
@@ -89,7 +78,7 @@ class N_MPJPE(nn.Module):
 		https://github.com/hrhodin/UnsupervisedGeometryAwareRepresentationLearning/blob/master/losses/poses.py
 		"""
 		assert keypoints_pred.shape == keypoints_gt.shape
-		
+
 		norm_keypoints_pred = torch.mean(torch.sum(keypoints_pred**2, dim=3, keepdim=True), dim=2, keepdim=True)
 		norm_keypoints_gt = torch.mean(torch.sum(keypoints_gt*keypoints_pred, dim=3, keepdim=True), dim=2, keepdim=True)
 		scale = norm_keypoints_gt / norm_keypoints_pred
@@ -105,10 +94,10 @@ class MPJVE(nn.Module):
 		Mean per-joint velocity error (i.e. mean Euclidean distance of the 1st derivative)
 		"""
 		assert keypoints_pred.shape == keypoints_gt.shape
-		
+
 		velocity_predicted = np.diff(keypoints_pred, axis=0)
 		velocity_target = np.diff(keypoints_gt, axis=0)
-		
+
 		return np.mean(np.linalg.norm(velocity_predicted - velocity_target, axis=len(keypoints_gt.shape)-1))
 
 
@@ -210,5 +199,3 @@ class LimbLengthError(nn.Module):
 			error += torch.abs(limb_length_pred - limb_length_gt).mean().cpu()
 
 		return float(error)/len(self.CONNECTIVITY_DICT)
-
-
