@@ -6,8 +6,8 @@ This repo is the official implementation for **A Single 2D Pose with Context is 
 
 ### News
 
-[2023.12.23] The pre-processed labels for Human3.6M are available [here](https://drive.google.com/drive/folders/1OYKWnu_5GPLRfceD3Psf4-JZkloBodKx). We also add the [video narration](https://recorder-v3.slideslive.com/#/share?share=87185&s=6df19fee-f7ae-4be9-af4e-3a89fd626400) for our paper.
-
+[2024.07.25] We updated the code for [MPI-INF-3DHP](https://github.com/QitaoZhao/ContextAware-PoseFormer/tree/main/ContextPose_mpi) (sorry about the delay) and added support for multiple feature backbones (HRNet-48 & CPN).
+[2023.12.23] The pre-processed labels for Human3.6M are available [here](https://drive.google.com/drive/folders/1OYKWnu_5GPLRfceD3Psf4-JZkloBodKx). We also added [video narration](https://recorder-v3.slideslive.com/#/share?share=87185&s=6df19fee-f7ae-4be9-af4e-3a89fd626400) for our paper.
 [2023.11.06] Our paper on [arXiv](https://arxiv.org/pdf/2311.03312.pdf) has been released. We are preparing for the video narration; some parts of the code still need cleaning. 
 
 ## Related Previous Work
@@ -77,11 +77,11 @@ code_root/
 
 ### Train
 
-It's time to train your model! Our framework supports multiple backbone 2D joint detectors. For now, we take [HRNet](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch) as an example.
+It's time to train your model! Our framework supports multiple 2D joint feature backbones.
 
 1. Move `h36m_train.pkl` and `h36m_validation.pkl` from `code_root/H36M-Toolbox/` to `code_root/ContextPose/data/`
-2. Download (COCO) pretrained weights for HRNet-32 from https://drive.google.com/drive/folders/1nzM_OBV9LbAEA7HClC0chEyf_7ECDXYA and place it under `code_root/ContextPose/data/pretrained/coco/`
-3. Your directory should look like this. Now, you are ready for training!
+2. Download (COCO) pretrained weights for [HRNet-32/48](https://drive.google.com/drive/folders/1nzM_OBV9LbAEA7HClC0chEyf_7ECDXYA) or [CPN](https://drive.google.com/file/d/1pUpU8o6QtgK197vAfCtT5cxokE9p-yuB/view) and place them under `code_root/ContextPose/data/pretrained/coco/`
+3. Your directory should look like this if you completed the previous steps.
 
 ```
 code_root/ 
@@ -97,28 +97,34 @@ code_root/
     	└── pretrained/
     		└── coco/
     			├── README.MD
-    			└── pose_hrnet_w32_256x192.pth
+    			├── CPN50_256x192.pth.tar
+    			├── pose_hrnet_w32_256x192.pth
+    			└── pose_hrnet_w48_256x192.pth
     └── mvn/
 ```
 
-You can train **Context-aware PoseFormer** on a single GPU with the following command:
+You can train **Context-Aware PoseFormer** with the following commands:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_single.yaml --logdir ./logs
+# Single GPU (we used a single 3090 to report our numbers, which is the default setting)
+CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 --master_port=2345 train.py --config experiments/human36m/human36m.yaml --backbone hrnet_32 --logdir ./logs
+
+# Multiple GPUs (e.g., 4, you might change LR a bit to get better results)
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 --master_port=2345 train.py --config experiments/human36m/human36m.yaml --backbone hrnet_32 --logdir ./logs
 ```
 
-If you want to train on multiple (e.g., 4) GPUS, simply do the following:
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_single.yaml --logdir ./logs
-```
+Available choices for `--backbone` are `['cpn', 'hrnet_32', 'hrnet_48']`.
 
 ### Test
 
-The checkpoint is available [here](https://drive.google.com/file/d/1sVJrSUszrhohipekPDa_rTeGa4EpEH7h/view?usp=drive_link). You should get 41.3mm MPJPE using this checkpoint. Place the trained model (`best_epoch.bin`) under `code_root/ContextPose/checkpoint/`, and run:
+We include the checkpoint for each backbone [here](https://drive.google.com/drive/u/1/folders/1O_i3OUTnqlkLWFu_3WKPU7YepWhItd59). Place the pre-trained model weights (`best_epoch_{BACKBONE_NAME}.bin`) under `code_root/ContextPose/checkpoint/`, and run:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 --master_port=2345 train.py --config experiments/human36m/train/human36m_vol_softmax_single.yaml --logdir ./logs --eval
+# Single GPU (this may take a while to complete)
+CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 --master_port=2345 train.py --config experiments/human36m/human36m.yaml --backbone hrnet_32 --logdir ./logs --eval
+
+# Multiple GPUs (e.g., 4, this should be much faster)
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --nproc_per_node=4 --master_port=2345 train.py --config experiments/human36m/human36m.yaml --backbone hrnet_32 --logdir ./logs --eval
 ```
 
 ## MPI-INF-3DHP

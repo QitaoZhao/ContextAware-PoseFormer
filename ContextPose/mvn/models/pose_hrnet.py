@@ -534,15 +534,7 @@ class PoseHighResolutionNet(nn.Module):
 
 
 def get_pose_net(config, is_train=False, **kwargs):
-    # args = parse_args()
-    # update_config(cfg, args)
-
     model = PoseHighResolutionNet(config, **kwargs)
-
-    # if is_train and config['MODEL']['INIT_WEIGHTS']:
-    #     model.init_weights(config['MODEL']['PRETRAINED'])
-
-    # if not is_train:
 
     return model
 

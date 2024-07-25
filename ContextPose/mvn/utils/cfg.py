@@ -16,18 +16,12 @@ config.frame = 1
 
 # model definition
 config.model = edict()
-config.model.name = "vol"
-config.model.kind = "mpii"
-config.model.image_shape = [384, 384]
-config.model.heatmap_shape = [96, 96]
-config.model.heatmap_softmax = True
-config.model.heatmap_multiplier = 100.0
+config.model.image_shape = [192, 256]
 config.model.init_weights = True
 config.model.checkpoint = None
 
 config.model.backbone = edict()
-config.model.backbone.name = "resnet152"
-config.model.backbone.style = "simple"
+config.model.backbone.type = 'hrnet_32'
 config.model.backbone.num_final_layer_channel = 17
 config.model.backbone.num_joints = 17
 config.model.backbone.num_layers = 152
@@ -92,7 +86,8 @@ config.model.volume_net.att_channels = 51
 config.model.volume_net.temperature = 1500
 
 config.model.poseformer = edict()
-config.model.poseformer.embed_dim_ratio = 32
+config.model.poseformer.base_dim = 32
+config.model.poseformer.embed_dim_ratio = 128
 config.model.poseformer.depth = 4
 config.model.poseformer.levels = 4
 
@@ -112,7 +107,6 @@ config.dataset = edict()
 config.dataset.kind = "human36m"
 config.dataset.data_format = ''
 config.dataset.transfer_cmu_to_human36m = False
-# config.dataset.root = "data/human36m/processed/"
 config.dataset.root = "../H36M-Toolbox/images/"
 config.dataset.extra_root = "data/human36m/extra"
 config.dataset.train_labels_path = "data/human36m/extra/human36m-multiview-labels-GTbboxes.npy"
@@ -167,6 +161,7 @@ config.val.num_workers = 10
 config.val.retain_every_n_frames_in_test = 1
 config.val.limb_length_path = "data/human36m/extra/mean_and_std_limb_length.h5"
 config.val.pred_results_path = "data/pretrained/human36m/human36m_alg_10-04-2019/checkpoints/0060/results/val.pkl"
+
 
 def update_dict(v, cfg):
     for kk, vv in v.items():

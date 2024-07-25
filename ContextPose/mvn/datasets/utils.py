@@ -13,16 +13,21 @@ joints_left = [4, 5, 6, 11, 12, 13]
 joints_right = [1, 2, 3, 14, 15, 16]
 
 class data_prefetcher():
-    def __init__(self, loader, device, is_train, flip_test):
+    def __init__(self, loader, device, is_train, flip_test, backbone):
         self.loader = iter(loader)
         self.stream = torch.cuda.Stream()
         self.device = device
         self.is_train = is_train
         self.flip_test = flip_test
-        # self.mean = torch.tensor([122.7717, 115.9465, 102.9801]).cuda().to(device).view(1, 1, 1, 3)
-        # self.mean /= 255.
-        self.mean = torch.tensor([0.485, 0.456, 0.406]).cuda().to(device)
-        self.std = torch.tensor([0.229, 0.224, 0.225]).cuda().to(device)
+        self.backbone = backbone
+
+        if backbone in ['hrnet_32', 'hrnet_48']:
+            self.mean = torch.tensor([0.485, 0.456, 0.406]).cuda().to(device)
+            self.std = torch.tensor([0.229, 0.224, 0.225]).cuda().to(device)
+        elif backbone == 'cpn':
+            self.mean = torch.tensor([122.7717, 115.9465, 102.9801]).cuda().to(device).view(1, 1, 1, 3)
+            self.mean /= 255.
+
         self.preload()
 
     def preload(self):
@@ -39,8 +44,11 @@ class data_prefetcher():
 
             images_batch = torch.flip(images_batch, [-1])
 
-            # images_batch = images_batch / 255.0 - self.mean # for CPN
-            images_batch = (images_batch / 255.0 - self.mean) / self.std
+            if self.backbone in ['hrnet_32', 'hrnet_48']:
+                images_batch = (images_batch / 255.0 - self.mean) / self.std
+            elif self.backbone == 'cpn':
+                images_batch = images_batch / 255.0 - self.mean  # for CPN
+                
             keypoints_3d_gt[:, :, 1:] -= keypoints_3d_gt[:, :, :1]
             keypoints_3d_gt[:, :, 0] = 0
 

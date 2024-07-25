@@ -16,7 +16,7 @@ from torch.nn.parallel import DistributedDataParallel
 from tensorboardX import SummaryWriter
 
 from mvn import datasets
-from mvn.models.conpose import VolumetricTriangulationNet
+from mvn.models.conpose import CA_PF
 from mvn.models.loss import MPJPE, KeypointsMSELoss, KeypointsMSESmoothLoss, KeypointsMAELoss
 
 from mvn.utils import misc
@@ -42,11 +42,13 @@ def parse_args():
 	parser.add_argument("--azureroot", type=str, default="", help="Root path, where codes are stored")
 
 	parser.add_argument("--frame", type=int, default=1, help="Frame number to be used.")
+	parser.add_argument("--backbone", type=str, default='hrnet_32', choices=['hrnet_32', 'hrnet_48', 'cpn'], help="2D pose feature backbone.")
 
 	args = parser.parse_args()
 	# update config
 	update_config(args.config)
 	update_dir(args.azureroot, args.logdir)
+	config.model.backbone.type = args.backbone
 	return args
 
 
@@ -164,7 +166,6 @@ def setup_experiment(config, model_name, is_train=True):
 
 def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoch, n_iters_total=0, is_train=True, lr=None, mean_and_std=None, limb_length=None, caption='', master=False, experiment_dir=None, writer=None, whole_val_dataloader=None, dist_size=None):
 	name = "train" if is_train else "val"
-	model_type = config.model.name
 
 	if is_train:
 		epoch_loss_3d_train = 0
@@ -185,7 +186,7 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 	# used to turn on/off gradients
 	grad_context = torch.autograd.enable_grad if is_train else torch.no_grad
 	with grad_context():
-		prefetcher = dataset_utils.data_prefetcher(dataloader, device, is_train, config.val.flip_test)
+		prefetcher = dataset_utils.data_prefetcher(dataloader, device, is_train, config.val.flip_test, config.model.backbone.type)
 
 		# for iter_i, batch in iterator:
 		batch = prefetcher.next()
@@ -196,22 +197,19 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 
 			images_batch, keypoints_3d_gt, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop = batch
 
-			if model_type == "vol":
-				if (not is_train) and config.val.flip_test:
-					keypoints_3d_pred = model(images_batch[:, 0], keypoints_2d_batch_cpn[:, 0], keypoints_2d_batch_cpn_crop[:, 0].clone())
-					keypoints_3d_pred_flip = model(images_batch[:, 1], keypoints_2d_batch_cpn[:, 1], keypoints_2d_batch_cpn_crop[:, 1].clone())
-					keypoints_3d_pred_flip[:, :, :, 0] *= -1
-					keypoints_3d_pred_flip[:, :, joints_left + joints_right] = keypoints_3d_pred_flip[:, :, joints_right + joints_left]
-					keypoints_3d_pred = torch.mean(torch.cat((keypoints_3d_pred, keypoints_3d_pred_flip), dim=1), dim=1,
-												   keepdim=True)
-					del keypoints_3d_pred_flip
+			if (not is_train) and config.val.flip_test:
+				keypoints_3d_pred = model(images_batch[:, 0], keypoints_2d_batch_cpn[:, 0], keypoints_2d_batch_cpn_crop[:, 0].clone())
+				keypoints_3d_pred_flip = model(images_batch[:, 1], keypoints_2d_batch_cpn[:, 1], keypoints_2d_batch_cpn_crop[:, 1].clone())
+				keypoints_3d_pred_flip[:, :, :, 0] *= -1
+				keypoints_3d_pred_flip[:, :, joints_left + joints_right] = keypoints_3d_pred_flip[:, :, joints_right + joints_left]
+				keypoints_3d_pred = torch.mean(torch.cat((keypoints_3d_pred, keypoints_3d_pred_flip), dim=1), dim=1,
+											   keepdim=True)
+				del keypoints_3d_pred_flip
 
-
-				else:    
-					keypoints_3d_pred = model(images_batch, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop)
+			else:    
+				keypoints_3d_pred = model(images_batch, keypoints_2d_batch_cpn, keypoints_2d_batch_cpn_crop)
 
 			n_joints = keypoints_3d_pred.shape[1]
-
 
 			# calculate loss
 			total_loss = 0.0
@@ -227,8 +225,6 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 				N += keypoints_3d_gt.shape[0]
 
 				if not torch.isnan(total_loss):
-					# for key in opt_dict.keys():
-					#     opt_dict[key].zero_grad()
 					optimizer.zero_grad()
 					total_loss.backward()
 
@@ -250,17 +246,14 @@ def one_epoch_full(model, criterion, optimizer, config, dataloader, device, epoc
 	# calculate evaluation metrics
 	if not is_train:
 		if dist_size is not None:
-			# term_list = ['keypoints_gt', 'keypoints_3d', 'proj_matricies_batch', 'indexes']
 			term_list = ['keypoints_gt', 'keypoints_3d']
 			for term in term_list:
-				# results[term] = np.concatenate(results[term])
 				results[term] = torch.cat(results[term])
 				buffer = [torch.zeros(dist_size[-1], *results[term].shape[1:]).cuda() for i in range(len(dist_size))]
 				scatter_tensor = torch.zeros_like(buffer[0])
 				scatter_tensor[:results[term].shape[0]] = results[term]
-				# scatter_tensor[:results[term].shape[0]] = torch.tensor(results[term]).cuda()
 				torch.distributed.all_gather(buffer, scatter_tensor)
-				results[term] = torch.cat([tensor[:n] for tensor, n in zip(buffer, dist_size)], dim = 0)#.cpu().numpy()
+				results[term] = torch.cat([tensor[:n] for tensor, n in zip(buffer, dist_size)], dim=0)
 
 	if master:
 		if not is_train:
@@ -313,12 +306,27 @@ def main(args):
 	else:
 		device = torch.device(0)
 
-	# config.train.n_iters_per_epoch = config.train.n_objects_per_epoch // config.train.batch_size   
-	config.train.n_iters_per_epoch = None                     
+	config.train.n_iters_per_epoch = None   
 
-	model = {
-		"vol": VolumetricTriangulationNet
-	}[config.model.name](config, device)
+	# Backbone-specific configurations
+	if args.backbone == 'hrnet_32':
+		# Default setting
+		config.model.poseformer.base_dim = 32
+
+	elif args.backbone == 'hrnet_48':
+		# Override the default setting
+		config.model.backbone.checkpoint = 'data/pretrained/coco/pose_hrnet_w48_256x192.pth'
+		config.model.backbone.STAGE2.NUM_CHANNELS = [48, 96]
+		config.model.backbone.STAGE3.NUM_CHANNELS = [48, 96, 192]
+		config.model.backbone.STAGE4.NUM_CHANNELS = [48, 96, 192, 384]
+		config.model.poseformer.base_dim = 48
+
+	elif args.backbone == 'cpn':
+		config.train.batch_size = 256
+		config.model.backbone.checkpoint = 'data/pretrained/coco/CPN50_256x192.pth.tar'
+		config.model.poseformer.base_dim = 256                 
+
+	model = CA_PF(config, device)
 
 	# experiment
 	experiment_dir, writer = None, None
@@ -327,59 +335,48 @@ def main(args):
 		shutil.copy('mvn/models/conpose.py', experiment_dir)
 		shutil.copy('mvn/models/pose_dformer.py', experiment_dir)
 		shutil.copy('train.py', experiment_dir)
-		# shutil.copy('mvn/models/pose_cformer.py', experiment_dir)
 
-	# logger = Logger(log_path=experiment_dir).logger
-	# logger.parent = None
 	print("args: {}".format(args))
 	print("Number of available GPUs: {}".format(torch.cuda.device_count()))
 
-	if config.model.init_weights:
-		checkpoint_path = None
-		if config.model.checkpoint != None:
-			checkpoint_path = config.model.checkpoint
-		elif os.path.isfile(os.path.join(config.logdir, "resume_weights_path.pth")):
-			checkpoint_path = torch.load(os.path.join(config.logdir, "resume_weights_path.pth"))
-		if checkpoint_path != None and os.path.isfile(checkpoint_path):
-			state_dict = torch.load(checkpoint_path, map_location=device)
+	if config.model.backbone.init_weights:
+		if args.backbone in ['hrnet_32', 'hrnet_48']:
+			# Load HRNet
+			ret = model.backbone.load_state_dict(torch.load(config.model.backbone.checkpoint), strict=False)
+
+		elif args.backbone == 'cpn':
+			# Load CPN
+			state_dict = torch.load(config.model.backbone.checkpoint, map_location=device)['state_dict']
 			for key in list(state_dict.keys()):
 				new_key = key.replace("module.", "")
 				state_dict[new_key] = state_dict.pop(key)
-			try:
-				model.load_state_dict(state_dict, strict=True)
-			except:
-				print('Warning: Final layer do not match!')
-				for key in list(state_dict.keys()):
-					if 'final_layer' in key:
-						state_dict.pop(key)
-				model.load_state_dict(state_dict, strict=True)
-			print("Successfully loaded weights for {} model from {}".format(config.model.name, checkpoint_path))
-			del state_dict
-		else:
-			print("Failed loading weights for {} model as no checkpoint found at {}".format(config.model.name, checkpoint_path))
+			ret = model.backbone.load_state_dict(state_dict, strict=True)
 
-	elif config.model.backbone.init_weights:
-		# Load HRNet
-		ret = model.backbone.load_state_dict(torch.load(config.model.backbone.checkpoint), strict=False)
-		# Load CPN
-		# state_dict = torch.load(config.model.backbone.checkpoint, map_location=device)['state_dict']
-		# for key in list(state_dict.keys()):
-		# 	new_key = key.replace("module.", "")
-		# 	state_dict[new_key] = state_dict.pop(key)
-		# ret = model.backbone.load_state_dict(state_dict, strict=True)
+		# For HRNet, expected to see "_IncompatibleKeys(missing_keys=[], unexpected_keys=['final_layer.weight', 'final_layer.bias'])"
+		# For CPN, expected to see "<All keys matched successfully>"
 		print(ret)
-		print("Loading backbone from {}".format(config.model.backbone.checkpoint))
+		print(f"Loading {args.backbone} backbone from {config.model.backbone.checkpoint}")
 
 	if args.eval:
-		checkpoint = torch.load("checkpoint/best_epoch.bin")['model']
+		if args.backbone == 'hrnet_32':
+			ckpt_path = 'checkpoint/best_epoch_hrnet_32.bin'
+
+		elif args.backbone == 'hrnet_48':
+			ckpt_path = 'checkpoint/best_epoch_hrnet_48.bin'
+
+		elif args.backbone == 'cpn':
+			ckpt_path = 'checkpoint/best_epoch_cpn.bin'
+
+		checkpoint = torch.load(ckpt_path)['model']
+
 		for key in list(checkpoint.keys()):
 			new_key = key.replace("module.", "")
 			checkpoint[new_key] = checkpoint.pop(key)
 
-		ret = model.load_state_dict(checkpoint, strict=False)
+		ret = model.load_state_dict(checkpoint, strict=True)
+		# Expected to see "<All keys matched successfully>"
 		print(ret)
-		# model.load_state_dict(checkpoint['model'], strict=True)
-		print("Loading checkpoint from {}".format("checkpoint/best_epoch.bin"))
+		print(f"Loading checkpoint from {ckpt_path}")
 
 	# sync bn in multi-gpus
 	if args.sync_bn:
@@ -405,54 +402,38 @@ def main(args):
 	lr_dict = None
 	lr = config.train.volume_net_lr
 	lr_decay = config.train.volume_net_lr_decay
+
 	if not args.eval:
-		if config.model.name == "vol":
-			opt_dict = {}
-			lr_schd_dict = {}
-			lr_dict = {}
-			
-			param_dicts = [
-			# {
-			# 	"params":
-			# 		[p for n, p in model.backbone.named_parameters() if p.requires_grad],
-			# 	"lr": config.train.volume_net_lr * 0.1,
-			# },
-			{
-				"params":
-					[p for n, p in model.volume_net.named_parameters()
-					if not match_name_keywords(n, 'sampling_offsets') and p.requires_grad],
-				"lr": config.train.volume_net_lr,
-			},
-			{
-				"params":
-					[p for n, p in model.volume_net.named_parameters()
-					if match_name_keywords(n, 'sampling_offsets') and p.requires_grad],
-				"lr": config.train.volume_net_lr * 0.1,
-			},
-			]
-			optimizer = optim.AdamW(param_dicts, weight_decay=0.1)
-		else:
-			assert 0, "Only support vol optimizer."
-		# load optimizer if has
-		if config.model.init_weights and checkpoint_path != None:
-			optimizer_path = checkpoint_path.replace('weights', 'optimizer')
-			if os.path.isfile(optimizer_path):
-				try:
-					optimizer_dict = torch.load(optimizer_path, map_location=device)
-					if config.model.name == 'vol':
-						opt_dict['3d'].load_state_dict(optimizer_dict['optimizer_3d'])
-						lr_schd_dict['3d'].load_state_dict(optimizer_dict['scheduler_3d'])
-						if 'scheduler_2d' in optimizer_dict.keys():
-							opt_dict['2d'].load_state_dict(optimizer_dict['optimizer_2d'])
-							lr_schd_dict['2d'].load_state_dict(optimizer_dict['scheduler_2d'])
-					else:
-						assert 0, "Only support vol optimizer."
-					del optimizer_dict
-					print("Successfully loaded optimizer parameters for {} model".format(config.model.name))
-				except:
-					print("Warning: optimizer does not match! Failed loading optimizer parameters for {} model".format(config.model.name))
-			else:
-				print("Failed loading optimizer parameters for {} model as no optimizer found at {}".format(config.model.name, optimizer_path))
+		opt_dict = {}
+		lr_schd_dict = {}
+		lr_dict = {}
+		
+		param_dicts = [
+		# While 1) should be the expected behavior aligned with the description in paper,
+		# we inadvertently used 2) to report our results (which just works properly).
+		# Refer to 'https://github.com/QitaoZhao/ContextAware-PoseFormer/issues/12' for more details.
+
+		# 1) Lower LR for deformable attention sampling
+		# {
+		# 	"params":
+		# 		[p for n, p in model.volume_net.named_parameters()
+		# 		if not match_name_keywords(n, ['sampling_offsets']) and p.requires_grad],
+		# 	"lr": config.train.volume_net_lr,
+		# },
+		# {
+		# 	"params":
+		# 		[p for n, p in model.volume_net.named_parameters()
+		# 		if match_name_keywords(n, ['sampling_offsets']) and p.requires_grad],
+		# 	"lr": config.train.volume_net_lr * 0.1,
+		# },
+		# 2) Same LR for the whole network
+		{
+			"params":
+				[p for n, p in model.volume_net.named_parameters() if p.requires_grad],
+			"lr": config.train.volume_net_lr,
+		},
+		]
+		optimizer = optim.AdamW(param_dicts, weight_decay=0.1)
 
 	# datasets
 	if master:
@@ -478,35 +459,22 @@ def main(args):
 		for epoch in range(config.train.n_epochs):
 			errors_p1 = []
 			errors_p2 = []
-			# errors_p3 = []
 			start_time = time.time()
 			if train_sampler is not None:
 				train_sampler.set_epoch(epoch)
 
-			if config.model.name == 'vol':
-				epoch_loss_3d_train = one_epoch_full(model, criterion, optimizer, config, train_dataloader, device, epoch, n_iters_total=n_iters_total_train, is_train=True, lr=lr_dict, master=master, experiment_dir=experiment_dir, writer=writer)
-				result = one_epoch_full(model, criterion, optimizer, config, val_dataloader, device, epoch, n_iters_total=n_iters_total_val, is_train=False, master=master, experiment_dir=experiment_dir, writer=writer, whole_val_dataloader=whole_val_dataloader, dist_size=dist_size)
+			epoch_loss_3d_train = one_epoch_full(model, criterion, optimizer, config, train_dataloader, device, epoch, n_iters_total=n_iters_total_train, is_train=True, lr=lr_dict, master=master, experiment_dir=experiment_dir, writer=writer)
+			result = one_epoch_full(model, criterion, optimizer, config, val_dataloader, device, epoch, n_iters_total=n_iters_total_val, is_train=False, master=master, experiment_dir=experiment_dir, writer=writer, whole_val_dataloader=whole_val_dataloader, dist_size=dist_size)
 
-				losses_3d_train.append(epoch_loss_3d_train)
+			losses_3d_train.append(epoch_loss_3d_train)
 
-				if master:
-					for k in result.keys():
-						errors_p1.append(result[k]['MPJPE'] * 1000)
-						errors_p2.append(result[k]['P_MPJPE'] * 1000)
-						# errors_p3.append(result[k]['N_MPJPE'] * 1000)
+			if master:
+				for k in result.keys():
+					errors_p1.append(result[k]['MPJPE'] * 1000)
+					errors_p2.append(result[k]['P_MPJPE'] * 1000)
 
-					error_p1 = round(np.mean(errors_p1), 1)
-					error_p2 = round(np.mean(errors_p2), 1)
-					# error_p3 = round(np.mean(errors_p3), 1)                
-
-				# for key in lr_schd_dict.keys():
-				#     lr_schd_dict[key].step()
-				#     try:
-				#         lr_dict[key] = lr_schd_dict[key].get_last_lr()[0]
-				#     except: # old PyTorch
-				#         lr_dict[key] = lr_schd_dict[key].get_lr()[0]
-			else:
-				assert 0, "only support training vol model."
+				error_p1 = round(np.mean(errors_p1), 1)
+				error_p2 = round(np.mean(errors_p2), 1)              
 
 			if master:
 				print('[%d] time %.2f lr %f 3d_train %f 3d_test_p1 %f 3d_test_p2 %f' % (
@@ -545,7 +513,6 @@ def main(args):
 				print(k, "p1:", result[k]['MPJPE'] * 1000, "p2:", result[k]['P_MPJPE'] * 1000, "e_vel:", result[k]['MPJVE'] * 1000)
 				errors_p1.append(result[k]['MPJPE'] * 1000)
 				errors_p2.append(result[k]['P_MPJPE'] * 1000)
-				# errors_p3.append(result[k]['N_MPJPE'] * 1000)
 				errors_vel.append(result[k]['MPJVE'] * 1000)
 
 			error_p1 = round(np.mean(errors_p1), 1)

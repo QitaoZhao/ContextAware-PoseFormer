@@ -81,7 +81,7 @@ class Block(nn.Module):
 
 class DeformableBlock(nn.Module):
 
-    def __init__(self, dim, num_heads, num_samples, qkv_bias=False, drop_path=0., mlp_ratio=2, norm_layer=nn.LayerNorm):
+    def __init__(self, feature_dim_list, dim, num_heads, num_samples, qkv_bias=False, drop_path=0., mlp_ratio=2, norm_layer=nn.LayerNorm):
         super().__init__()
         self.num_heads = num_heads
         self.num_samples = num_samples
@@ -89,12 +89,7 @@ class DeformableBlock(nn.Module):
         self.norm1 = norm_layer(dim)
         self.attention_weights = nn.Linear(dim, num_heads * num_samples)
         self.sampling_offsets = nn.Linear(dim, 2 * num_heads * num_samples)
-        self.embed_proj = nn.ModuleList([
-            nn.Linear(32, head_dim),
-            nn.Linear(64, head_dim),
-            nn.Linear(128, head_dim),
-            nn.Linear(256, head_dim),
-            ])
+        self.embed_proj = nn.ModuleList([nn.Linear(dim_in, head_dim) for dim_in in feature_dim_list])
 
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
@@ -147,7 +142,7 @@ class DeformableBlock(nn.Module):
 
 
 class PoseTransformer(nn.Module):
-    def __init__(self, config=None, num_frame=1, num_joints=17, in_chans=2,
+    def __init__(self, config=None, backbone='hrnet_32', num_joints=17, in_chans=2,
                  num_heads=8, mlp_ratio=2., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.2,  norm_layer=None):
         """    ##########hybrid_backbone=None, representation_size=None,
@@ -169,24 +164,22 @@ class PoseTransformer(nn.Module):
         super().__init__()
 
         norm_layer = norm_layer or partial(nn.LayerNorm, eps=1e-6)
-        # embed_dim_ratio = config.embed_dim_ratio
-        embed_dim_ratio = 128
-        # depth = config.depth
-        depth = 4
-        # embed_dim = embed_dim_ratio * num_joints   #### temporal embed_dim is num_joints * spatial embedding dim ratio
+        base_dim = config.base_dim
+        embed_dim_ratio = config.embed_dim_ratio
+        depth = config.levels
         out_dim = 3    #### output dimension is num_joints * 3
-        # self.levels = config.levels
-        self.levels = 4
+        self.levels = config.levels
         embed_dim = embed_dim_ratio * (self.levels+1)
 
         ### spatial patch embedding
         self.coord_embed = nn.Linear(in_chans, embed_dim_ratio)
-        self.feat_embed = nn.ModuleList([
-            nn.Linear(32, embed_dim_ratio),
-            nn.Linear(64, embed_dim_ratio),
-            nn.Linear(128, embed_dim_ratio),
-            nn.Linear(256, embed_dim_ratio),
-            ])
+
+        if backbone in ['hrnet_32', 'hrnet_48']:
+            feature_dim_list = [base_dim, base_dim * 2, base_dim * 4, base_dim * 8]
+        elif backbone == 'cpn':
+            feature_dim_list = [base_dim] * 4
+
+        self.feat_embed = nn.ModuleList([nn.Linear(dim_in, embed_dim_ratio) for dim_in in feature_dim_list])
 
         self.Spatial_pos_embed = nn.Parameter(torch.zeros(1, 1+self.levels, num_joints, embed_dim_ratio))
         self.pos_drop = nn.Dropout(p=drop_rate)
@@ -206,7 +199,7 @@ class PoseTransformer(nn.Module):
             for i in range(depth)])
 
         self.context_blocks = nn.ModuleList([
-            DeformableBlock(dim=embed_dim_ratio, num_heads=4, num_samples=4, qkv_bias=qkv_bias, drop_path=dpr[i])
+            DeformableBlock(feature_dim_list=feature_dim_list, dim=embed_dim_ratio, num_heads=4, num_samples=4, qkv_bias=qkv_bias, drop_path=dpr[i])
             for i in range(depth)])
 
         self.head = nn.Sequential(

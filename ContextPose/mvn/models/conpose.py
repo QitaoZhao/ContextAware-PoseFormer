@@ -2,30 +2,29 @@ import torch
 from torch import nn
 
 from mvn.models import pose_hrnet
+from mvn.models.networks import network
+from mvn.models.cpn.test_config import cfg
 from mvn.models.pose_dformer import PoseTransformer
 
 
-class VolumetricTriangulationNet(nn.Module):
+class CA_PF(nn.Module):
     def __init__(self, config, device='cuda:0'):
         super().__init__()
 
         self.num_joints = config.model.backbone.num_joints
 
-        # HRNet
-        self.backbone = pose_hrnet.get_pose_net(config.model.backbone)
-        # ResNet
-        # self.backbone = pose_resnet.get_pose_net(config.model.backbone)
-        # CPN
-        # output_shape = (96, 72) for 384 * 288 CPN model
-        # self.backbone = network.__dict__[cfg.model]((96,72), cfg.num_class, pretrained=False)
-        # self.backbone = network.__dict__[cfg.model](cfg.output_shape, cfg.num_class, pretrained=False)
+        if config.model.backbone.type in ['hrnet_32', 'hrnet_48']:
+            self.backbone = pose_hrnet.get_pose_net(config.model.backbone)
+
+        elif config.model.backbone.type == 'cpn':
+            self.backbone = network.__dict__[cfg.model](cfg.output_shape, cfg.num_class, pretrained=False)
 
         if config.model.backbone.fix_weights:
             print("model backbone weights are fixed")
             for p in self.backbone.parameters():
                 p.requires_grad = False
 
-        self.volume_net = PoseTransformer(config.model.poseformer)
+        self.volume_net = PoseTransformer(config.model.poseformer, backbone=config.model.backbone.type)
 
 
     def forward(self, images, keypoints_2d_cpn, keypoints_2d_cpn_crop):
